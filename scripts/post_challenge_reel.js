@@ -26,7 +26,7 @@ const QUOTES_PATH = path.join(PROJECT_ROOT, 'quotes_108.json');
 const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
 
 // Load environment variables or fallback
-const FB_PAGE_ID = (process.env.FACEBOOK_PAGE_ID || '').trim();
+const FB_PAGE_ID = (process.env.FACEBOOK_PAGE_ID || '1413344915187463').trim();
 const FB_TOKEN = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '').trim();
 const IG_ACCOUNT_ID = (process.env.INSTAGRAM_ACCOUNT_ID || '').trim();
 const IG_TOKEN = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim();
