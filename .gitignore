@@ -1,15 +1,22 @@
-node_modules/
+﻿node_modules/
 .DS_Store
 Thumbs.db
 *.log
 rendered_reels/*.mp4
 !rendered_reels/.gitkeep
 temp_assets/
+temp_build/
 
 # Heavy video and audio assets
+raw_clips/**/*.mp4
+raw_clips/**/*.mov
+raw_clips/**/*.mkv
+raw_clips/**/*.webm
 raw_clips/*.mp4
 raw_clips/*.mov
 !raw_clips/.gitkeep
+!raw_clips/morning_challenge/.gitkeep
+!raw_clips/night_showcase/.gitkeep
 
 background_music/*.mp3
 background_music/*.wav
@@ -20,4 +27,3 @@ background_music/*.wav
 *RULE*.md
 *Rule*.md
 *rule*.md
-temp_build/

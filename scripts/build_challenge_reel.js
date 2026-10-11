@@ -15,6 +15,8 @@ const { EdgeTTS, Constants } = require('@andresaya/edge-tts');
 // --- Paths & Constants ---
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const RAW_CLIPS_DIR = path.join(PROJECT_ROOT, 'raw_clips');
+const MORNING_CLIPS_DIR = path.join(RAW_CLIPS_DIR, 'morning_challenge');
+const NIGHT_CLIPS_DIR = path.join(RAW_CLIPS_DIR, 'night_showcase');
 const BGM_DIR = path.join(PROJECT_ROOT, 'background_music');
 const ASSETS_DIR = path.join(PROJECT_ROOT, 'assets');
 const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
@@ -372,11 +374,19 @@ async function renderOutroCard(outputPath) {
   await browser.close();
 }
 
-function resolveRawVideoSource(seedIndex, contentDuration, outPreparedVideo) {
+function resolveRawVideoSource(subfolderDir, seedIndex, contentDuration, outPreparedVideo) {
   const allowedExts = ['.mp4', '.mov', '.mkv', '.webm'];
-  const availableClips = fs.readdirSync(RAW_CLIPS_DIR)
-    .filter(f => allowedExts.includes(path.extname(f).toLowerCase()))
-    .map(f => path.join(RAW_CLIPS_DIR, f));
+  let availableClips = [];
+  if (fs.existsSync(subfolderDir)) {
+    availableClips = fs.readdirSync(subfolderDir)
+      .filter(f => allowedExts.includes(path.extname(f).toLowerCase()))
+      .map(f => path.join(subfolderDir, f));
+  }
+  if (availableClips.length === 0 && fs.existsSync(RAW_CLIPS_DIR)) {
+    availableClips = fs.readdirSync(RAW_CLIPS_DIR)
+      .filter(f => allowedExts.includes(path.extname(f).toLowerCase()))
+      .map(f => path.join(RAW_CLIPS_DIR, f));
+  }
 
   if (availableClips.length > 0) {
     const selected = availableClips[(seedIndex - 1) % availableClips.length];
@@ -433,8 +443,9 @@ async function buildReel(type = 'challenge', targetId = null) {
   await renderOutroCard(outroPngPath);
 
   // 3. Raw video cut
+  const targetClipsDir = isFeature ? NIGHT_CLIPS_DIR : MORNING_CLIPS_DIR;
   const seedNum = isFeature ? (itemData.id + 10) : itemData.day;
-  resolveRawVideoSource(seedNum, voiceDuration, rawVideoCutPath);
+  resolveRawVideoSource(targetClipsDir, seedNum, voiceDuration, rawVideoCutPath);
 
   // 4. FFmpeg assembly
   const fadeOutStart = Math.max(0, totalDuration - 1.2).toFixed(2);
