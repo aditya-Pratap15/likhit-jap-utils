@@ -24,7 +24,7 @@ const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
 // Load environment variables or fallback
 const FB_PAGE_ID = (process.env.FACEBOOK_PAGE_ID || '1413344915187463').trim();
 const FB_TOKEN = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '').trim();
-const IG_ACCOUNT_ID = (process.env.INSTAGRAM_ACCOUNT_ID || '').trim();
+const IG_ACCOUNT_ID = (process.env.INSTAGRAM_ACCOUNT_ID || '17841455874945250').trim();
 const IG_TOKEN = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim();
 const YT_CLIENT_ID = (process.env.YOUTUBE_CLIENT_ID || '').trim();
 const YT_CLIENT_SECRET = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
@@ -257,6 +257,149 @@ async function publishYouTubeShort(videoPath, title, description) {
   return { error: uploadResult };
 }
 
+
+/**
+ * 3. Publish to Instagram Reels (Resumable Meta Protocol)
+ */
+async function publishInstagramReel(videoPath, caption) {
+  const token = IG_TOKEN || FB_TOKEN;
+  if (!IG_ACCOUNT_ID || !token) {
+    console.log('  ⚠️ Skipping Instagram Reel: INSTAGRAM_ACCOUNT_ID or ACCESS_TOKEN not set.');
+    return { skipped: true };
+  }
+
+  if (!fs.existsSync(videoPath)) return { skipped: true, error: 'Video file missing' };
+  const fileSize = fs.statSync(videoPath).size;
+  console.log(`  📸 Uploading Instagram Reel to @likhitjap (${IG_ACCOUNT_ID})...`);
+
+  const initParams = {
+    access_token: token,
+    upload_type: 'resumable',
+    media_type: 'REELS',
+    caption: caption
+  };
+
+  const initData = new URLSearchParams(initParams).toString();
+  const initRes = await new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'graph.facebook.com',
+      port: 443,
+      path: `/v26.0/${IG_ACCOUNT_ID}/media`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(initData)
+      }
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { resolve({ error: data }); }
+      });
+    });
+    req.on('error', err => resolve({ error: err.message }));
+    req.write(initData);
+    req.end();
+  });
+
+  if (!initRes || !initRes.id || !initRes.uri) {
+    console.error('  ❌ Instagram Reel container init failed:', initRes);
+    return { error: initRes };
+  }
+
+  const containerId = initRes.id;
+  const uploadUrl = new URL(initRes.uri);
+
+  const uploadSuccess = await new Promise((resolve) => {
+    const fileStream = fs.createReadStream(videoPath);
+    const req = https.request({
+      hostname: uploadUrl.hostname,
+      port: 443,
+      path: uploadUrl.pathname + uploadUrl.search,
+      method: 'POST',
+      headers: {
+        'Authorization': `OAuth ${token}`,
+        'offset': '0',
+        'file_size': fileSize.toString()
+      }
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success !== false);
+        } catch (e) { resolve(true); }
+      });
+    });
+    req.on('error', () => resolve(false));
+    fileStream.pipe(req);
+  });
+
+  if (!uploadSuccess) {
+    console.error('  ❌ Instagram binary upload failed.');
+    return { error: 'Upload stream failed' };
+  }
+
+  // Poll status up to 60s
+  console.log('  ⏳ Processing Instagram video encoding on Meta servers...');
+  let isReady = false;
+  let attempts = 0;
+  while (!isReady && attempts < 12) {
+    await new Promise(r => setTimeout(r, 5000));
+    attempts++;
+    const statusRes = await new Promise(resolve => {
+      https.get(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${token}`, res => {
+        let d = ''; res.on('data', c => d += c);
+        res.on('end', () => {
+          try { resolve(JSON.parse(d)); } catch (e) { resolve({}); }
+        });
+      });
+    });
+
+    if (statusRes.status_code === 'FINISHED') isReady = true;
+    else if (statusRes.status_code === 'ERROR') {
+      console.error('  ❌ Meta transcoding error:', statusRes);
+      return { error: statusRes };
+    }
+  }
+
+  // Publish
+  const pubParams = new URLSearchParams({
+    creation_id: containerId,
+    access_token: token
+  }).toString();
+
+  const pubRes = await new Promise(resolve => {
+    const req = https.request({
+      hostname: 'graph.facebook.com',
+      port: 443,
+      path: `/v26.0/${IG_ACCOUNT_ID}/media_publish`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(pubParams)
+      }
+    }, res => {
+      let data = ''; res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { resolve({ error: data }); }
+      });
+    });
+    req.on('error', err => resolve({ error: err.message }));
+    req.write(pubParams);
+    req.end();
+  });
+
+  if (pubRes.id) {
+    console.log(`  ✅ Instagram Reel Published Live! Post ID: ${pubRes.id}`);
+    return { success: true, postId: pubRes.id };
+  } else {
+    console.error('  ❌ Instagram Publish Error:', pubRes);
+    return { error: pubRes };
+  }
+}
+
 // --- Main Publisher ---
 async function publishReel(type = 'challenge', targetId = null) {
   console.log('\n======================================================');
@@ -294,7 +437,10 @@ async function publishReel(type = 'challenge', targetId = null) {
   // 1. Facebook Reels
   await publishFacebookReel(reelPath, itemData.caption);
 
-  // 2. YouTube Shorts
+  // 2. Instagram Reels
+  await publishInstagramReel(reelPath, itemData.caption);
+
+  // 3. YouTube Shorts
   await publishYouTubeShort(reelPath, shortTitle, itemData.caption);
 
   // Update State
