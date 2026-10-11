@@ -1,19 +1,9 @@
 ﻿/**
- * 🕉️ LIKHIT JAP - REEL STUDIO & VIDEO ENGINE (v1.0 Master Production)
- * ------------------------------------------------------------------
- * Automated Daily 9:16 Video Generator for 108-Day Sacred Jap Challenge.
- * Builds high-converting vertical Reels/Shorts for:
- * - Instagram Reels
- * - YouTube Shorts
- * - Facebook Reels
- *
- * Architecture:
- * 1. Day & Metadata: Fetches Day X reflection from quotes_108.json & state.json.
- * 2. Raw Clip Rotation: Cycles through user screen-recordings in raw_clips/.
- * 3. Divine Hindi Voiceover: Synthesizes hi-IN-MadhurNeural using @andresaya/edge-tts.
- * 4. High-Resolution Visuals: Uses Puppeteer to render pixel-perfect Devanagari typography.
- * 5. Audio Engineering: Mixes authentic app Bansuri flute BGM (18%) with boosted voiceover (180%).
- * 6. High-Converting Outro: Dedicated 3.2s CTA card driving searches for "Likhit Jap" on Play Store.
+ * 🕉️ LIKHIT JAP - DUAL REEL STUDIO & VIDEO ENGINE (v2.0 Master Production)
+ * -----------------------------------------------------------------------
+ * Automated Daily 9:16 Video Generator supporting Dual-Drop Cadence:
+ * 1. Morning Slot (--type challenge): 108-Day Sacred Jap Challenge (Day 1..108)
+ * 2. Night Slot (--type feature): App Feature & Mental Peace Showcase (Features 1..6)
  */
 
 const fs = require('fs');
@@ -31,6 +21,7 @@ const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
 const TEMP_DIR = path.join(PROJECT_ROOT, 'temp_build');
 const STATE_PATH = path.join(PROJECT_ROOT, 'state.json');
 const QUOTES_PATH = path.join(PROJECT_ROOT, 'quotes_108.json');
+const FEATURES_PATH = path.join(PROJECT_ROOT, 'app_features.json');
 
 const BGM_PATH = path.join(BGM_DIR, 'bansuri_bgm.mp3');
 const APP_ICON_PATH = path.join(ASSETS_DIR, 'app_icon.png');
@@ -41,23 +32,19 @@ const OUTRO_DURATION = 3.2; // seconds
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-// Load state or initialize
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
     try {
       return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
-    } catch (e) {
-      console.warn('⚠️ Could not parse state.json, initializing fresh state.');
-    }
+    } catch (e) {}
   }
-  return { currentDay: 1, history: [] };
+  return { currentDay: 1, currentFeatureIndex: 1, history: [] };
 }
 
 function saveState(state) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), 'utf8');
 }
 
-// Probe audio duration via ffprobe
 function getMediaDuration(mediaPath) {
   try {
     const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${mediaPath}"`;
@@ -65,12 +52,10 @@ function getMediaDuration(mediaPath) {
     const dur = parseFloat(stdout);
     return isNaN(dur) ? 15.0 : dur;
   } catch (err) {
-    console.warn(`⚠️ Could not probe duration for ${mediaPath}, defaulting to 15s.`, err.message);
     return 15.0;
   }
 }
 
-// Generate Hindi neural voiceover
 async function generateHindiVoice(text, outputPath) {
   const tts = new EdgeTTS();
   const voice = 'hi-IN-MadhurNeural';
@@ -84,9 +69,9 @@ async function generateHindiVoice(text, outputPath) {
   return duration;
 }
 
-// Render Quote & Header Overlay via Puppeteer
-async function renderQuoteOverlay(dayData, outputPath) {
-  console.log('  🎨 Rendering high-res typography overlay via Puppeteer...');
+// Render Typography Overlay for Challenge or Feature
+async function renderOverlay(itemData, isFeature, outputPath) {
+  console.log(`  🎨 Rendering typography overlay (${isFeature ? 'App Feature' : 'Sacred Challenge'})...`);
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -94,14 +79,19 @@ async function renderQuoteOverlay(dayData, outputPath) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });
 
+  const headerPillTitle = isFeature ? '5-MIN DAILY SACRED HABIT' : '108-DAY SACRED JAP CHALLENGE';
+  const headerPillTag = isFeature ? 'FEATURE SPOTLIGHT' : itemData.dayText;
+  const subBadgeText = isFeature ? itemData.badge : `दैनिक नाम साधना: ${itemData.mantra}`;
+  const benefitChipText = isFeature ? itemData.benefitChip : '✍️ लिखित नाम जप · १० गुना अधिक प्रभाव';
+  const hookText = itemData.hook;
+  const bodyText = isFeature ? itemData.body : itemData.quoteHindi;
+
   const html = `
   <!DOCTYPE html>
   <html>
   <head>
     <meta charset="utf-8" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Rozha+One&family=Yatra+One&family=Noto+Sans+Devanagari:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Noto+Sans+Devanagari:wght@600;700;800;900&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -116,8 +106,6 @@ async function renderQuoteOverlay(dayData, outputPath) {
         color: #FFFFFF;
         overflow: hidden;
       }
-
-      /* Top Sacred Header Pill */
       .header-pill {
         align-self: center;
         background: linear-gradient(135deg, rgba(234, 88, 12, 0.95), rgba(180, 83, 9, 0.95));
@@ -144,8 +132,6 @@ async function renderQuoteOverlay(dayData, outputPath) {
         border-radius: 999px;
         color: #FFFFFF;
       }
-
-      /* Center Floating Sacred Watermark / Mantra Badge */
       .mantra-badge {
         align-self: center;
         margin-top: 30px;
@@ -163,14 +149,11 @@ async function renderQuoteOverlay(dayData, outputPath) {
         font-weight: 800;
         color: #FCD34D;
       }
-
-      /* Bottom Wisdom Card */
       .bottom-container {
         display: flex;
         flex-direction: column;
         gap: 24px;
       }
-
       .wisdom-card {
         background: linear-gradient(180deg, rgba(20, 14, 8, 0.88) 0%, rgba(10, 6, 2, 0.94) 100%);
         backdrop-filter: blur(18px);
@@ -180,18 +163,6 @@ async function renderQuoteOverlay(dayData, outputPath) {
         box-shadow: 0 25px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(254, 240, 138, 0.3);
         position: relative;
       }
-
-      .quote-mark {
-        font-family: 'Rozha One', serif;
-        font-size: 90px;
-        line-height: 40px;
-        color: #F59E0B;
-        opacity: 0.8;
-        position: absolute;
-        top: 25px;
-        left: 28px;
-      }
-
       .hook-text {
         font-size: 40px;
         font-weight: 900;
@@ -200,16 +171,13 @@ async function renderQuoteOverlay(dayData, outputPath) {
         margin-bottom: 20px;
         text-shadow: 0 3px 8px rgba(0,0,0,0.8);
       }
-
       .wisdom-body {
-        font-size: 33px;
+        font-size: 32px;
         font-weight: 600;
         line-height: 1.5;
         color: #F3F4F6;
         text-shadow: 0 2px 6px rgba(0,0,0,0.9);
       }
-
-      /* Micro banner inside card */
       .card-footer {
         margin-top: 24px;
         display: flex;
@@ -237,23 +205,23 @@ async function renderQuoteOverlay(dayData, outputPath) {
   <body>
     <div>
       <div class="header-pill">
-        <span style="font-size: 32px;">🚩</span>
-        <span class="header-title">108-DAY SACRED JAP CHALLENGE</span>
-        <span class="header-tag">${dayData.dayText}</span>
+        <span style="font-size: 32px;">${isFeature ? '✨' : '🚩'}</span>
+        <span class="header-title">${headerPillTitle}</span>
+        <span class="header-tag">${headerPillTag}</span>
       </div>
 
       <div class="mantra-badge">
         <span>✨</span>
-        <span class="mantra-text">दैनिक नाम साधना: ${dayData.mantra}</span>
+        <span class="mantra-text">${subBadgeText}</span>
       </div>
     </div>
 
     <div class="bottom-container">
       <div class="wisdom-card">
-        <div class="hook-text">${dayData.hook}</div>
-        <div class="wisdom-body">${dayData.quoteHindi}</div>
+        <div class="hook-text">${hookText}</div>
+        <div class="wisdom-body">${bodyText}</div>
         <div class="card-footer">
-          <div class="benefit-chip">✍️ लिखित नाम जप · १० गुना अधिक प्रभाव</div>
+          <div class="benefit-chip">${benefitChipText}</div>
           <div class="app-mention">APP: LIKHIT JAP</div>
         </div>
       </div>
@@ -265,12 +233,9 @@ async function renderQuoteOverlay(dayData, outputPath) {
   await page.setContent(html, { waitUntil: 'networkidle0' });
   await page.screenshot({ path: outputPath, omitBackground: true });
   await browser.close();
-  console.log(`  ✅ Typography overlay saved to ${outputPath}`);
 }
 
-// Render Outro Card via Puppeteer
 async function renderOutroCard(outputPath) {
-  console.log('  🌟 Rendering high-converting Play Store Outro CTA...');
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -278,7 +243,6 @@ async function renderOutroCard(outputPath) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });
 
-  // Read app icon as base64
   let appIconBase64 = '';
   if (fs.existsSync(APP_ICON_PATH)) {
     appIconBase64 = 'data:image/png;base64,' + fs.readFileSync(APP_ICON_PATH).toString('base64');
@@ -289,7 +253,7 @@ async function renderOutroCard(outputPath) {
   <html>
   <head>
     <meta charset="utf-8" />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Noto+Sans+Devanagari:wght@700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Noto+Sans+Devanagari:wght@700;800;900&display=swap" rel="stylesheet">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -306,8 +270,6 @@ async function renderOutroCard(outputPath) {
         position: relative;
         overflow: hidden;
       }
-
-      /* Glowing Aura Background */
       .aura {
         position: absolute;
         width: 750px;
@@ -317,7 +279,6 @@ async function renderOutroCard(outputPath) {
         filter: blur(50px);
         z-index: 1;
       }
-
       .content-wrapper {
         position: relative;
         z-index: 2;
@@ -327,8 +288,6 @@ async function renderOutroCard(outputPath) {
         text-align: center;
         width: 100%;
       }
-
-      /* App Icon with 3D Luxury Frame */
       .icon-container {
         width: 250px;
         height: 250px;
@@ -342,12 +301,7 @@ async function renderOutroCard(outputPath) {
         margin-bottom: 45px;
         overflow: hidden;
       }
-      .icon-container img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
+      .icon-container img { width: 100%; height: 100%; object-fit: cover; }
       .app-title-hindi {
         font-size: 78px;
         font-weight: 900;
@@ -355,29 +309,9 @@ async function renderOutroCard(outputPath) {
         text-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
         margin-bottom: 6px;
       }
-      .app-title-en {
-        font-size: 50px;
-        font-weight: 900;
-        letter-spacing: 4px;
-        color: #FFFFFF;
-        margin-bottom: 24px;
-      }
-
-      .tagline {
-        font-size: 34px;
-        font-weight: 700;
-        color: #FCD34D;
-        max-width: 820px;
-        line-height: 1.45;
-        margin-bottom: 40px;
-      }
-
-      /* Trust Badges */
-      .badges-row {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 55px;
-      }
+      .app-title-en { font-size: 50px; font-weight: 900; letter-spacing: 4px; color: #FFFFFF; margin-bottom: 24px; }
+      .tagline { font-size: 34px; font-weight: 700; color: #FCD34D; max-width: 820px; line-height: 1.45; margin-bottom: 40px; }
+      .badges-row { display: flex; gap: 20px; margin-bottom: 55px; }
       .badge {
         background: rgba(255, 255, 255, 0.08);
         border: 1.5px solid rgba(254, 240, 138, 0.3);
@@ -387,8 +321,6 @@ async function renderOutroCard(outputPath) {
         font-weight: 700;
         color: #F3F4F6;
       }
-
-      /* CTA Button */
       .cta-button {
         width: 90%;
         max-width: 860px;
@@ -403,26 +335,9 @@ async function renderOutroCard(outputPath) {
         gap: 10px;
         margin-bottom: 35px;
       }
-      .cta-headline {
-        font-size: 42px;
-        font-weight: 900;
-        color: #1A0D00;
-        letter-spacing: 0.5px;
-      }
-      .cta-sub {
-        font-size: 26px;
-        font-weight: 800;
-        color: #451A03;
-      }
-
-      .bio-pointer {
-        font-size: 32px;
-        font-weight: 800;
-        color: #FDE68A;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
+      .cta-headline { font-size: 42px; font-weight: 900; color: #1A0D00; }
+      .cta-sub { font-size: 26px; font-weight: 800; color: #451A03; }
+      .bio-pointer { font-size: 32px; font-weight: 800; color: #FDE68A; display: flex; align-items: center; gap: 14px; }
     </style>
   </head>
   <body>
@@ -431,23 +346,18 @@ async function renderOutroCard(outputPath) {
       <div class="icon-container">
         <img src="${appIconBase64}" alt="Likhit Jap Icon" />
       </div>
-
       <div class="app-title-hindi">लिखित जप</div>
       <div class="app-title-en">LIKHIT JAP</div>
-
       <div class="tagline">हाथ से नाम लिखने की पहली डिजिटल नाम जप डायरी</div>
-
       <div class="badges-row">
         <div class="badge">⭐ 108 माला काउंटर</div>
         <div class="badge">🔔 मंदिर घंटियां</div>
         <div class="badge">🕊️ 100% मुफ़्त & ऑफ़लाइन</div>
       </div>
-
       <div class="cta-button">
         <div class="cta-headline">🔍 Google Play Store पर सर्च करें</div>
         <div class="cta-sub">"Likhit Jap" टाइप करके आज ही शुरू करें</div>
       </div>
-
       <div class="bio-pointer">
         <span>📲 लिंक बायो में उपलब्ध है</span>
         <span style="font-size: 38px;">👆</span>
@@ -460,82 +370,74 @@ async function renderOutroCard(outputPath) {
   await page.setContent(html, { waitUntil: 'networkidle0' });
   await page.screenshot({ path: outputPath });
   await browser.close();
-  console.log(`  ✅ Outro card saved to ${outputPath}`);
 }
 
-// Select raw clip from raw_clips/ or generate dynamic backdrop if empty
-function resolveRawVideoSource(dayIndex, contentDuration, outPreparedVideo) {
+function resolveRawVideoSource(seedIndex, contentDuration, outPreparedVideo) {
   const allowedExts = ['.mp4', '.mov', '.mkv', '.webm'];
   const availableClips = fs.readdirSync(RAW_CLIPS_DIR)
     .filter(f => allowedExts.includes(path.extname(f).toLowerCase()))
     .map(f => path.join(RAW_CLIPS_DIR, f));
 
   if (availableClips.length > 0) {
-    const selected = availableClips[(dayIndex - 1) % availableClips.length];
-    console.log(`  🎬 Using rotating raw recording: ${path.basename(selected)} (Rotation ${dayIndex}/${availableClips.length})`);
-    
-    // Scale and pad to standard 1080x1920 with subtle darkening so text pops
+    const selected = availableClips[(seedIndex - 1) % availableClips.length];
+    console.log(`  🎬 Using rotating raw recording: ${path.basename(selected)} (Rotation ${seedIndex}/${availableClips.length})`);
     const filter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,eq=brightness=-0.08:contrast=1.05`;
     const cmd = `ffmpeg -y -stream_loop -1 -i "${selected}" -t ${contentDuration.toFixed(2)} -vf "${filter}" -c:v libx264 -preset fast -crf 20 -an "${outPreparedVideo}"`;
     execSync(cmd, { stdio: 'inherit' });
     return outPreparedVideo;
   }
 
-  // Fallback: Synthesize rich sacred motion parchment backdrop if no user recordings uploaded yet
-  console.log(`  ℹ️ No user recordings found in raw_clips/. Synthesizing sacred temple backdrop for Day ${dayIndex}...`);
   const cmd = `ffmpeg -y -f lavfi -i "color=c=0x1A0F05:s=1080x1920:r=30:d=${contentDuration.toFixed(2)}" -vf "drawbox=x=40:y=40:w=1000:h=1840:color=gold@0.2:t=3,format=yuv420p" -c:v libx264 -preset fast -crf 20 "${outPreparedVideo}"`;
   execSync(cmd, { stdio: 'inherit' });
   return outPreparedVideo;
 }
 
-// --- Main Reel Production Pipeline ---
-async function buildReel(targetDay = null) {
+// --- Main Builder Pipeline ---
+async function buildReel(type = 'challenge', targetId = null) {
   console.log('\n======================================================');
-  console.log('🕉️ LIKHIT JAP - SACRED 108-DAY REEL FACTORY');
+  console.log(`🕉️ LIKHIT JAP - REEL STUDIO [MODE: ${type.toUpperCase()}]`);
   console.log('======================================================');
 
   const state = loadState();
-  const day = targetDay || state.currentDay || 1;
+  const isFeature = type === 'feature';
 
-  if (!fs.existsSync(QUOTES_PATH)) {
-    throw new Error(`quotes_108.json not found at ${QUOTES_PATH}!`);
+  let itemData = null;
+  let safePrefix = '';
+
+  if (isFeature) {
+    const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
+    const featId = targetId || state.currentFeatureIndex || 1;
+    itemData = featuresList.find(f => f.id === featId) || featuresList[0];
+    safePrefix = `Feature_${String(itemData.id).padStart(2, '0')}`;
+    console.log(`📱 Building Night Showcase #${itemData.id}: "${itemData.theme}"`);
+  } else {
+    const quotesList = JSON.parse(fs.readFileSync(QUOTES_PATH, 'utf8'));
+    const day = targetId || state.currentDay || 1;
+    itemData = quotesList.find(q => q.day === day) || quotesList[0];
+    safePrefix = `Day_${String(itemData.day).padStart(3, '0')}`;
+    console.log(`📅 Building Morning Challenge Day ${itemData.day}/108: Mantra: ${itemData.mantra}`);
   }
-  const quotesList = JSON.parse(fs.readFileSync(QUOTES_PATH, 'utf8'));
-  const dayData = quotesList.find(q => q.day === day) || quotesList[0];
 
-  console.log(`📅 Building Reel for Day ${dayData.day} / 108:`);
-  console.log(`   - Mantra: ${dayData.mantra} (${dayData.mantraEnglish})`);
-  console.log(`   - Hook: "${dayData.hook}"`);
-
-  const safePrefix = `Day_${String(day).padStart(3, '0')}`;
   const voicePath = path.join(TEMP_DIR, `${safePrefix}_voice.mp3`);
   const overlayPngPath = path.join(TEMP_DIR, `${safePrefix}_overlay.png`);
   const outroPngPath = path.join(TEMP_DIR, `outro_card.png`);
   const rawVideoCutPath = path.join(TEMP_DIR, `${safePrefix}_raw_cut.mp4`);
   const finalReelPath = path.join(REELS_DIR, `${safePrefix}_LikhitJap_Reel.mp4`);
 
-  // 1. Synthesize Hindi voiceover
-  const voiceDuration = await generateHindiVoice(dayData.voiceScript, voicePath);
+  // 1. Voiceover
+  const voiceDuration = await generateHindiVoice(itemData.voiceScript, voicePath);
   const totalDuration = voiceDuration + OUTRO_DURATION;
 
-  // 2. Generate Graphic Overlays
-  await renderQuoteOverlay(dayData, overlayPngPath);
+  // 2. Overlays
+  await renderOverlay(itemData, isFeature, overlayPngPath);
   await renderOutroCard(outroPngPath);
 
-  // 3. Prepare Base Video
-  resolveRawVideoSource(day, voiceDuration, rawVideoCutPath);
+  // 3. Raw video cut
+  const seedNum = isFeature ? (itemData.id + 10) : itemData.day;
+  resolveRawVideoSource(seedNum, voiceDuration, rawVideoCutPath);
 
-  // 4. Assemble Video with FFmpeg
-  console.log(`  🎞️ Assembling Final 1080x1920 Reel (${totalDuration.toFixed(2)}s)...`);
-
-  // Inputs:
-  // 0: rawVideoCutPath (voiceDuration)
-  // 1: overlayPngPath
-  // 2: outroPngPath
-  // 3: voicePath
-  // 4: BGM_PATH (bansuri_bgm.mp3)
+  // 4. FFmpeg assembly
   const fadeOutStart = Math.max(0, totalDuration - 1.2).toFixed(2);
-
   const filterComplex = 
     `[0:v][1:v]overlay=0:0[main_scene];` +
     `[2:v]loop=loop=${Math.round(OUTRO_DURATION * 30)}:size=1:start=0,setpts=PTS-STARTPTS[outro_scene];` +
@@ -561,35 +463,32 @@ async function buildReel(targetDay = null) {
 
   execSync(ffmpegCmd, { stdio: 'inherit' });
 
-  console.log(`\n🎉 SUCCESS! Sacred Challenge Reel Created:`);
-  console.log(`   📁 Output: ${finalReelPath}`);
-  console.log(`   ⏱️ Duration: ${totalDuration.toFixed(2)}s`);
-  console.log(`   📝 Caption Ready in quotes_108.json`);
-
-  // Update State if this was the planned currentDay
-  if (!targetDay || targetDay === state.currentDay) {
-    state.lastBuiltDay = day;
-    state.lastBuiltAt = new Date().toISOString();
-    state.lastBuiltVideo = finalReelPath;
-    saveState(state);
-  }
+  console.log(`\n🎉 Reel created successfully: ${finalReelPath} (${totalDuration.toFixed(2)}s)`);
 
   return {
-    day,
+    type,
+    id: isFeature ? itemData.id : itemData.day,
     videoPath: finalReelPath,
-    caption: dayData.caption
+    caption: itemData.caption
   };
 }
 
-// CLI entry point
 if (require.main === module) {
   const args = process.argv.slice(2);
-  let dayArg = null;
-  const dayIdx = args.indexOf('--day');
-  if (dayIdx !== -1 && args[dayIdx + 1]) {
-    dayArg = parseInt(args[dayIdx + 1], 10);
+  let type = 'challenge';
+  let targetId = null;
+
+  const typeIdx = args.indexOf('--type');
+  if (typeIdx !== -1 && args[typeIdx + 1]) {
+    type = args[typeIdx + 1].toLowerCase();
   }
-  buildReel(dayArg).catch(err => {
+
+  const idIdx = args.indexOf('--id') !== -1 ? args.indexOf('--id') : args.indexOf('--day');
+  if (idIdx !== -1 && args[idIdx + 1]) {
+    targetId = parseInt(args[idIdx + 1], 10);
+  }
+
+  buildReel(type, targetId).catch(err => {
     console.error('❌ Build failed:', err);
     process.exit(1);
   });

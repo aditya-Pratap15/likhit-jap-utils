@@ -1,18 +1,28 @@
-﻿name: Likhit Jap Daily 108 Challenge Reel Engine
+﻿name: Likhit Jap Dual-Drop Automation Engine
 
 on:
   schedule:
-    # 06:00 AM IST daily (00:30 AM UTC) - Prime morning devotional peak
-    - cron: '30 0 * * *'
+    # Drop 1: 06:30 AM IST (01:00 AM UTC) - Morning Devotional Challenge Reel
+    - cron: '0 1 * * *'
+    # Drop 2: 09:45 PM IST (04:15 PM UTC) - Night App Showcase & Mental Peace Reel
+    - cron: '15 16 * * *'
   workflow_dispatch:
     inputs:
-      day:
-        description: 'Target Challenge Day (1-108, leave blank for auto-increment)'
+      type:
+        description: 'Reel Type: "challenge" (Morning 108 Challenge) or "feature" (Night Showcase)'
+        required: true
+        default: 'challenge'
+        type: choice
+        options:
+          - challenge
+          - feature
+      target_id:
+        description: 'Target ID (Day 1-108 or Feature 1-6, leave blank for auto)'
         required: false
         default: ''
 
 jobs:
-  build-and-publish:
+  run-engine:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -26,25 +36,46 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install FFmpeg
+      - name: Install System Dependencies (FFmpeg & Fonts)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-cjk fonts-deva
 
-      - name: Install Dependencies
+      - name: Install NPM Dependencies
         run: npm install
 
-      - name: Build Daily Challenge Reel
-        env:
-          TARGET_DAY: ${{ github.event.inputs.day }}
+      - name: Determine Target Mode
+        id: mode
         run: |
-          if [ -n "$TARGET_DAY" ]; then
-            node scripts/build_challenge_reel.js --day "$TARGET_DAY"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
+            echo "target_id=${{ github.event.inputs.target_id }}" >> $GITHUB_OUTPUT
           else
-            node scripts/build_challenge_reel.js
+            # Automated cron schedule: determine by UTC hour
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -ge "12" ]; then
+              # Evening / Night run (16:15 UTC = 21:45 IST)
+              echo "type=feature" >> $GITHUB_OUTPUT
+              echo "target_id=" >> $GITHUB_OUTPUT
+            else
+              # Morning run (01:00 UTC = 06:30 IST)
+              echo "type=challenge" >> $GITHUB_OUTPUT
+              echo "target_id=" >> $GITHUB_OUTPUT
+            fi
           fi
 
-      - name: Syndicate to Platforms (Facebook, Instagram, YouTube)
+      - name: Build Reel Video
+        run: |
+          TYPE="${{ steps.mode.outputs.type }}"
+          TARGET_ID="${{ steps.mode.outputs.target_id }}"
+          echo "Executing Build for Mode: $TYPE, ID: $TARGET_ID"
+          if [ -n "$TARGET_ID" ]; then
+            node scripts/build_challenge_reel.js --type "$TYPE" --id "$TARGET_ID"
+          else
+            node scripts/build_challenge_reel.js --type "$TYPE"
+          fi
+
+      - name: Syndicate to Platforms
         env:
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
@@ -53,12 +84,13 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          TARGET_DAY: ${{ github.event.inputs.day }}
         run: |
-          if [ -n "$TARGET_DAY" ]; then
-            node scripts/post_challenge_reel.js --day "$TARGET_DAY"
+          TYPE="${{ steps.mode.outputs.type }}"
+          TARGET_ID="${{ steps.mode.outputs.target_id }}"
+          if [ -n "$TARGET_ID" ]; then
+            node scripts/post_challenge_reel.js --type "$TYPE" --id "$TARGET_ID"
           else
-            node scripts/post_challenge_reel.js
+            node scripts/post_challenge_reel.js --type "$TYPE"
           fi
 
       - name: Commit Updated Progress State
@@ -66,4 +98,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           git add state.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-progress: Likhit Jap Day advanced [skip ci]" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-progress: Likhit Jap dual state advanced [skip ci]" && git push)
