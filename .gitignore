@@ -1,0 +1,23 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+rendered_reels/*.mp4
+!rendered_reels/.gitkeep
+temp_assets/
+
+# Heavy video and audio assets
+raw_clips/*.mp4
+raw_clips/*.mov
+!raw_clips/.gitkeep
+
+background_music/*.mp3
+background_music/*.wav
+!background_music/.gitkeep
+
+# Private Master Blueprint Documentation (Never pushed to GitHub)
+*Guide*.md
+*RULE*.md
+*Rule*.md
+*rule*.md
+temp_build/

@@ -1,0 +1,22 @@
+{
+  "name": "likhit-jap-pipeline",
+  "version": "1.0.0",
+  "description": "Autonomous Video Factory for Likhit Jap App",
+  "main": "scripts/build_challenge_reel.js",
+  "scripts": {
+    "build": "node scripts/build_challenge_reel.js",
+    "post": "node scripts/post_challenge_reel.js"
+  },
+  "keywords": [
+    "likhit-jap",
+    "mantra",
+    "automation",
+    "reels"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@andresaya/edge-tts": "^1.8.1",
+    "puppeteer": "^25.13.0"
+  }
+}
