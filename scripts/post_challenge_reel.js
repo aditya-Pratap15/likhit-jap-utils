@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 🚀 LIKHIT JAP - MULTI-PLATFORM DUAL PUBLISHER (v2.0 Master Production)
  * ---------------------------------------------------------------------
  * Automatically syndicates both:
@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { execSync } = require('child_process');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const STATE_PATH = path.join(PROJECT_ROOT, 'state.json');
@@ -269,7 +270,28 @@ async function publishInstagramReel(videoPath, caption) {
   }
 
   if (!fs.existsSync(videoPath)) return { skipped: true, error: 'Video file missing' };
-  const fileSize = fs.statSync(videoPath).size;
+
+  let uploadVideoPath = videoPath;
+  let fileSize = fs.statSync(videoPath).size;
+
+  // Auto-optimize if video > 20 MB for rapid Meta transcode
+  if (fileSize > 20 * 1024 * 1024) {
+    const optPath = videoPath.replace(/\.mp4$/i, '_optimized.mp4');
+    if (!fs.existsSync(optPath)) {
+      console.log('  ⚡ Video is large (' + (fileSize / 1024 / 1024).toFixed(1) + ' MB). Optimizing with FFmpeg for instant Instagram transcode...');
+      try {
+        execSync(`ffmpeg -y -i "${videoPath}" -c:v libx264 -preset fast -crf 23 -maxrate 4.5M -bufsize 9M -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${optPath}"`, { stdio: 'ignore' });
+      } catch (e) {
+        console.warn('  ⚠️ FFmpeg optimization skipped:', e.message);
+      }
+    }
+    if (fs.existsSync(optPath)) {
+      uploadVideoPath = optPath;
+      fileSize = fs.statSync(uploadVideoPath).size;
+      console.log('  ✅ Video optimized to ' + (fileSize / 1024 / 1024).toFixed(1) + ' MB for instant Meta ingestion.');
+    }
+  }
+
   console.log(`  📸 Uploading Instagram Reel to @likhitjap (${IG_ACCOUNT_ID})...`);
 
   const initParams = {
@@ -311,7 +333,7 @@ async function publishInstagramReel(videoPath, caption) {
   const uploadUrl = new URL(initRes.uri);
 
   const uploadSuccess = await new Promise((resolve) => {
-    const fileStream = fs.createReadStream(videoPath);
+    const fileStream = fs.createReadStream(uploadVideoPath);
     const req = https.request({
       hostname: uploadUrl.hostname,
       port: 443,
@@ -341,12 +363,12 @@ async function publishInstagramReel(videoPath, caption) {
     return { error: 'Upload stream failed' };
   }
 
-  // Poll status up to 60s
+  // Poll status up to 160s
   console.log('  ⏳ Processing Instagram video encoding on Meta servers...');
   let isReady = false;
   let attempts = 0;
-  while (!isReady && attempts < 12) {
-    await new Promise(r => setTimeout(r, 5000));
+  while (!isReady && attempts < 40) {
+    await new Promise(r => setTimeout(r, 4000));
     attempts++;
     const statusRes = await new Promise(resolve => {
       https.get(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${token}`, res => {
@@ -354,14 +376,23 @@ async function publishInstagramReel(videoPath, caption) {
         res.on('end', () => {
           try { resolve(JSON.parse(d)); } catch (e) { resolve({}); }
         });
-      });
+      }).on('error', () => resolve({}));
     });
 
-    if (statusRes.status_code === 'FINISHED') isReady = true;
-    else if (statusRes.status_code === 'ERROR') {
+    if (statusRes.status_code === 'FINISHED') {
+      isReady = true;
+      console.log(`  ✅ Meta transcode ready (${attempts * 4}s)!`);
+    } else if (statusRes.status_code === 'ERROR') {
       console.error('  ❌ Meta transcoding error:', statusRes);
       return { error: statusRes };
+    } else {
+      console.log(`  ⏳ Transcoding in progress (Attempt ${attempts}/40: ${statusRes.status_code || 'PENDING'})...`);
     }
+  }
+
+  if (!isReady) {
+    console.error('  ❌ Meta encoding timed out. Cannot publish.');
+    return { error: 'Encoding timeout' };
   }
 
   // Publish
