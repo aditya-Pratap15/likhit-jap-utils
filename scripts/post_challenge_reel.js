@@ -31,6 +31,20 @@ const YT_CLIENT_ID = (process.env.YOUTUBE_CLIENT_ID || '').trim();
 const YT_CLIENT_SECRET = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
 const YT_REFRESH_TOKEN = (process.env.YOUTUBE_REFRESH_TOKEN || '').trim();
 
+function formatUnicodeBold(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text.replace(/\*\*(.+?)\*\*/g, (_, s) => {
+    return Array.from(s).map(c => {
+      const code = c.charCodeAt(0);
+      if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + code - 65);   // A-Z
+      if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + code - 97);  // a-z
+      if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + code - 48);   // 0-9
+      return c;
+    }).join('');
+  });
+}
+
+
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
     try {
@@ -48,6 +62,7 @@ function saveState(state) {
  * 1. Publish to Facebook Reels
  */
 async function publishFacebookReel(videoPath, description) {
+  const cleanDescription = formatUnicodeBold(description);
   if (!FB_PAGE_ID || !FB_TOKEN) {
     console.log('  âš ï¸ Skipping Facebook Reel: FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not set.');
     return { skipped: true };
@@ -124,7 +139,7 @@ async function publishFacebookReel(videoPath, description) {
     upload_phase: 'finish',
     video_id: startRes.video_id,
     video_state: 'PUBLISHED',
-    description: description
+    description: cleanDescription
   }).toString();
 
   await new Promise(resolve => {
@@ -157,6 +172,8 @@ async function publishFacebookReel(videoPath, description) {
  * 2. Publish to YouTube Shorts
  */
 async function publishYouTubeShort(videoPath, title, description) {
+  const cleanTitle = formatUnicodeBold(title);
+  const cleanDescription = formatUnicodeBold(description);
   if (!YT_CLIENT_ID || !YT_CLIENT_SECRET || !YT_REFRESH_TOKEN) {
     console.log('  âš ï¸ Skipping YouTube Shorts: YOUTUBE credentials not set.');
     return { skipped: true };
@@ -196,8 +213,8 @@ async function publishYouTubeShort(videoPath, title, description) {
   console.log(`  ðŸ”´ Uploading YouTube Short: "${title}"...`);
   const metadata = JSON.stringify({
     snippet: {
-      title: title.slice(0, 100),
-      description: description,
+      title: cleanTitle.slice(0, 100),
+      description: cleanDescription,
       tags: ['LikhitJap', 'Shorts', 'NaamJap', 'RadhaNaam', 'MentalPeace', 'SpiritualIndia'],
       categoryId: '22'
     },
@@ -263,6 +280,7 @@ async function publishYouTubeShort(videoPath, title, description) {
  * 3. Publish to Instagram Reels (Resumable Meta Protocol)
  */
 async function publishInstagramReel(videoPath, caption) {
+  const cleanCaption = formatUnicodeBold(caption);
   const token = IG_TOKEN || FB_TOKEN;
   if (!IG_ACCOUNT_ID || !token) {
     console.log('  âš ï¸ Skipping Instagram Reel: INSTAGRAM_ACCOUNT_ID or ACCESS_TOKEN not set.');
@@ -298,7 +316,7 @@ async function publishInstagramReel(videoPath, caption) {
     access_token: token,
     upload_type: 'resumable',
     media_type: 'REELS',
-    caption: caption
+    caption: cleanCaption
   };
 
   const initData = new URLSearchParams(initParams).toString();
@@ -465,14 +483,17 @@ async function publishReel(type = 'challenge', targetId = null) {
 
   console.log(`ðŸš€ Publishing Reel: ${reelFileName}`);
 
+  const formattedCaption = formatUnicodeBold(itemData.caption);
+  const formattedTitle = formatUnicodeBold(shortTitle);
+
   // 1. Facebook Reels
-  await publishFacebookReel(reelPath, itemData.caption);
+  await publishFacebookReel(reelPath, formattedCaption);
 
   // 2. Instagram Reels
-  await publishInstagramReel(reelPath, itemData.caption);
+  await publishInstagramReel(reelPath, formattedCaption);
 
   // 3. YouTube Shorts
-  await publishYouTubeShort(reelPath, shortTitle, itemData.caption);
+  await publishYouTubeShort(reelPath, formattedTitle, formattedCaption);
 
   // Update State
   if (isFeature) {
