@@ -455,7 +455,7 @@ async function publishReel(type = 'challenge', targetId = null) {
     const day = targetId || state.currentDay || 1;
     itemData = quotesList.find(q => q.day === day) || quotesList[0];
     reelFileName = `Day_${String(itemData.day).padStart(3, '0')}_LikhitJap_Reel.mp4`;
-    shortTitle = `108-Day Sacred Jap Challenge | Day ${itemData.day}/108 #Shorts #LikhitJap`;
+    shortTitle = `Daily Naam Jap — Day ${itemData.day} ✨ #Shorts #LikhitJap #NaamJap`;
   }
 
   const reelPath = path.join(REELS_DIR, reelFileName);
