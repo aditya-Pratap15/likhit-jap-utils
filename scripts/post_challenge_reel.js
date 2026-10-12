@@ -1,5 +1,5 @@
-/**
- * 🚀 LIKHIT JAP - MULTI-PLATFORM DUAL PUBLISHER (v2.0 Master Production)
+﻿/**
+ * ðŸš€ LIKHIT JAP - MULTI-PLATFORM DUAL PUBLISHER (v2.0 Master Production)
  * ---------------------------------------------------------------------
  * Automatically syndicates both:
  * 1. Morning Challenge Reels (--type challenge)
@@ -24,9 +24,9 @@ const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
 
 // Load environment variables or fallback
 const FB_PAGE_ID = (process.env.FACEBOOK_PAGE_ID || '1413344915187463').trim();
-const FB_TOKEN = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '').trim();
+const FB_TOKEN = (process.env.FACEBOOK_PAGE_ACCESS_TOKEN || 'EAAi2ZB1tN8IIBSkkrGUNSUHqtX5qzgA4lpCYlf4xygevpLneAODRYnA0v0QisvJ2OwckynnrzUYtrZBIWHik1bXkcY0r45C5KnotZBJIZBxYQudDqgk2sPLuFwbiGFIp5qQK1FkkK3oKo7wi0Vn9Qg4u1RV0CqMwSoaGAZAvTWkfdF1KBBy353X3a75bnWYANp0rJIRjE').trim();
 const IG_ACCOUNT_ID = (process.env.INSTAGRAM_ACCOUNT_ID || '17841455874945250').trim();
-const IG_TOKEN = (process.env.INSTAGRAM_ACCESS_TOKEN || '').trim();
+const IG_TOKEN = (process.env.INSTAGRAM_ACCESS_TOKEN || FB_TOKEN).trim();
 const YT_CLIENT_ID = (process.env.YOUTUBE_CLIENT_ID || '').trim();
 const YT_CLIENT_SECRET = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
 const YT_REFRESH_TOKEN = (process.env.YOUTUBE_REFRESH_TOKEN || '').trim();
@@ -49,11 +49,11 @@ function saveState(state) {
  */
 async function publishFacebookReel(videoPath, description) {
   if (!FB_PAGE_ID || !FB_TOKEN) {
-    console.log('  ⚠️ Skipping Facebook Reel: FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not set.');
+    console.log('  âš ï¸ Skipping Facebook Reel: FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not set.');
     return { skipped: true };
   }
 
-  console.log(`  📘 Uploading Facebook Reel (${FB_PAGE_ID})...`);
+  console.log(`  ðŸ“˜ Uploading Facebook Reel (${FB_PAGE_ID})...`);
   const videoBuf = fs.readFileSync(videoPath);
   const fileSize = videoBuf.length;
 
@@ -86,7 +86,7 @@ async function publishFacebookReel(videoPath, description) {
   });
 
   if (!startRes.video_id || !startRes.upload_url) {
-    console.error('  ❌ Facebook Reel init failed:', startRes);
+    console.error('  âŒ Facebook Reel init failed:', startRes);
     return { error: startRes };
   }
 
@@ -149,7 +149,7 @@ async function publishFacebookReel(videoPath, description) {
     req.end();
   });
 
-  console.log(`  ✅ Facebook Reel Published! Video ID: ${startRes.video_id}`);
+  console.log(`  âœ… Facebook Reel Published! Video ID: ${startRes.video_id}`);
   return { success: true, videoId: startRes.video_id };
 }
 
@@ -158,7 +158,7 @@ async function publishFacebookReel(videoPath, description) {
  */
 async function publishYouTubeShort(videoPath, title, description) {
   if (!YT_CLIENT_ID || !YT_CLIENT_SECRET || !YT_REFRESH_TOKEN) {
-    console.log('  ⚠️ Skipping YouTube Shorts: YOUTUBE credentials not set.');
+    console.log('  âš ï¸ Skipping YouTube Shorts: YOUTUBE credentials not set.');
     return { skipped: true };
   }
 
@@ -193,7 +193,7 @@ async function publishYouTubeShort(videoPath, title, description) {
 
   if (!accessToken) return { error: 'OAuth failed' };
 
-  console.log(`  🔴 Uploading YouTube Short: "${title}"...`);
+  console.log(`  ðŸ”´ Uploading YouTube Short: "${title}"...`);
   const metadata = JSON.stringify({
     snippet: {
       title: title.slice(0, 100),
@@ -252,7 +252,7 @@ async function publishYouTubeShort(videoPath, title, description) {
   });
 
   if (uploadResult.id) {
-    console.log(`  ✅ YouTube Short Live! URL: https://youtube.com/shorts/${uploadResult.id}`);
+    console.log(`  âœ… YouTube Short Live! URL: https://youtube.com/shorts/${uploadResult.id}`);
     return { success: true, videoId: uploadResult.id };
   }
   return { error: uploadResult };
@@ -265,7 +265,7 @@ async function publishYouTubeShort(videoPath, title, description) {
 async function publishInstagramReel(videoPath, caption) {
   const token = IG_TOKEN || FB_TOKEN;
   if (!IG_ACCOUNT_ID || !token) {
-    console.log('  ⚠️ Skipping Instagram Reel: INSTAGRAM_ACCOUNT_ID or ACCESS_TOKEN not set.');
+    console.log('  âš ï¸ Skipping Instagram Reel: INSTAGRAM_ACCOUNT_ID or ACCESS_TOKEN not set.');
     return { skipped: true };
   }
 
@@ -278,21 +278,21 @@ async function publishInstagramReel(videoPath, caption) {
   if (fileSize > 20 * 1024 * 1024) {
     const optPath = videoPath.replace(/\.mp4$/i, '_optimized.mp4');
     if (!fs.existsSync(optPath)) {
-      console.log('  ⚡ Video is large (' + (fileSize / 1024 / 1024).toFixed(1) + ' MB). Optimizing with FFmpeg for instant Instagram transcode...');
+      console.log('  âš¡ Video is large (' + (fileSize / 1024 / 1024).toFixed(1) + ' MB). Optimizing with FFmpeg for instant Instagram transcode...');
       try {
         execSync(`ffmpeg -y -i "${videoPath}" -c:v libx264 -preset fast -crf 23 -maxrate 4.5M -bufsize 9M -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${optPath}"`, { stdio: 'ignore' });
       } catch (e) {
-        console.warn('  ⚠️ FFmpeg optimization skipped:', e.message);
+        console.warn('  âš ï¸ FFmpeg optimization skipped:', e.message);
       }
     }
     if (fs.existsSync(optPath)) {
       uploadVideoPath = optPath;
       fileSize = fs.statSync(uploadVideoPath).size;
-      console.log('  ✅ Video optimized to ' + (fileSize / 1024 / 1024).toFixed(1) + ' MB for instant Meta ingestion.');
+      console.log('  âœ… Video optimized to ' + (fileSize / 1024 / 1024).toFixed(1) + ' MB for instant Meta ingestion.');
     }
   }
 
-  console.log(`  📸 Uploading Instagram Reel to @likhitjap (${IG_ACCOUNT_ID})...`);
+  console.log(`  ðŸ“¸ Uploading Instagram Reel to @likhitjap (${IG_ACCOUNT_ID})...`);
 
   const initParams = {
     access_token: token,
@@ -325,7 +325,7 @@ async function publishInstagramReel(videoPath, caption) {
   });
 
   if (!initRes || !initRes.id || !initRes.uri) {
-    console.error('  ❌ Instagram Reel container init failed:', initRes);
+    console.error('  âŒ Instagram Reel container init failed:', initRes);
     return { error: initRes };
   }
 
@@ -359,12 +359,12 @@ async function publishInstagramReel(videoPath, caption) {
   });
 
   if (!uploadSuccess) {
-    console.error('  ❌ Instagram binary upload failed.');
+    console.error('  âŒ Instagram binary upload failed.');
     return { error: 'Upload stream failed' };
   }
 
   // Poll status up to 160s
-  console.log('  ⏳ Processing Instagram video encoding on Meta servers...');
+  console.log('  â³ Processing Instagram video encoding on Meta servers...');
   let isReady = false;
   let attempts = 0;
   while (!isReady && attempts < 40) {
@@ -381,17 +381,17 @@ async function publishInstagramReel(videoPath, caption) {
 
     if (statusRes.status_code === 'FINISHED') {
       isReady = true;
-      console.log(`  ✅ Meta transcode ready (${attempts * 4}s)!`);
+      console.log(`  âœ… Meta transcode ready (${attempts * 4}s)!`);
     } else if (statusRes.status_code === 'ERROR') {
-      console.error('  ❌ Meta transcoding error:', statusRes);
+      console.error('  âŒ Meta transcoding error:', statusRes);
       return { error: statusRes };
     } else {
-      console.log(`  ⏳ Transcoding in progress (Attempt ${attempts}/40: ${statusRes.status_code || 'PENDING'})...`);
+      console.log(`  â³ Transcoding in progress (Attempt ${attempts}/40: ${statusRes.status_code || 'PENDING'})...`);
     }
   }
 
   if (!isReady) {
-    console.error('  ❌ Meta encoding timed out. Cannot publish.');
+    console.error('  âŒ Meta encoding timed out. Cannot publish.');
     return { error: 'Encoding timeout' };
   }
 
@@ -423,10 +423,10 @@ async function publishInstagramReel(videoPath, caption) {
   });
 
   if (pubRes.id) {
-    console.log(`  ✅ Instagram Reel Published Live! Post ID: ${pubRes.id}`);
+    console.log(`  âœ… Instagram Reel Published Live! Post ID: ${pubRes.id}`);
     return { success: true, postId: pubRes.id };
   } else {
-    console.error('  ❌ Instagram Publish Error:', pubRes);
+    console.error('  âŒ Instagram Publish Error:', pubRes);
     return { error: pubRes };
   }
 }
@@ -434,7 +434,7 @@ async function publishInstagramReel(videoPath, caption) {
 // --- Main Publisher ---
 async function publishReel(type = 'challenge', targetId = null) {
   console.log('\n======================================================');
-  console.log(`📡 LIKHIT JAP - MULTI-PLATFORM PUBLISHER [${type.toUpperCase()}]`);
+  console.log(`ðŸ“¡ LIKHIT JAP - MULTI-PLATFORM PUBLISHER [${type.toUpperCase()}]`);
   console.log('======================================================');
 
   const state = loadState();
@@ -463,7 +463,7 @@ async function publishReel(type = 'challenge', targetId = null) {
     throw new Error(`Reel video not found at ${reelPath}. Run build first!`);
   }
 
-  console.log(`🚀 Publishing Reel: ${reelFileName}`);
+  console.log(`ðŸš€ Publishing Reel: ${reelFileName}`);
 
   // 1. Facebook Reels
   await publishFacebookReel(reelPath, itemData.caption);
@@ -479,16 +479,16 @@ async function publishReel(type = 'challenge', targetId = null) {
     const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
     state.lastPublishedFeatureId = itemData.id;
     state.currentFeatureIndex = (itemData.id % featuresList.length) + 1;
-    console.log(`✨ Advanced next feature index to: #${state.currentFeatureIndex}`);
+    console.log(`âœ¨ Advanced next feature index to: #${state.currentFeatureIndex}`);
   } else {
     state.lastPublishedDay = itemData.day;
     state.currentDay = (itemData.day % 108) + 1;
-    console.log(`✨ Advanced next challenge day to: Day ${state.currentDay}`);
+    console.log(`âœ¨ Advanced next challenge day to: Day ${state.currentDay}`);
   }
   state.lastPublishedAt = new Date().toISOString();
   saveState(state);
 
-  console.log('\n🏁 Publishing cycle complete!\n');
+  console.log('\nðŸ Publishing cycle complete!\n');
 }
 
 if (require.main === module) {
@@ -507,9 +507,10 @@ if (require.main === module) {
   }
 
   publishReel(type, targetId).catch(err => {
-    console.error('❌ Publishing error:', err);
+    console.error('âŒ Publishing error:', err);
     process.exit(1);
   });
 }
 
 module.exports = { publishReel };
+
