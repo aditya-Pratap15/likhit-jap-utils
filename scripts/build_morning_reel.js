@@ -1,12 +1,14 @@
 /**
  * 🌅 LIKHIT JAP - MORNING REEL ENGINE (v3.0 Master Production)
  * ------------------------------------------------------------
- * 1. 0.0s - 1.5s: 'Day X of Naam Jap' elegant minimalist opener
+ * 1. 0.0s - 1.5s: 'Day X of Naam Jap ✨' prominent elegant opener (centered at top: 520px)
  * 2. Fullscreen Hero Clip (raw_clips/hero_clips/)
- * 3. Circular PIP Screen (raw_clips/pip_clips/) in Top Corner:
+ * 3. 100% Circular PIP Screen (raw_clips/pip_clips/) in Top Corner:
+ *    - Mathematically clipped with geq circular alpha (ZERO square edges/corners!)
+ *    - Framed by gold ring border
  *    - Alternating daily: Odd Days -> Top-Right, Even Days -> Top-Left
  *    - If PIP < Hero: Loops up to the same length as main clip
- *    - If PIP > Hero: Ending screen continues showing with PIP speech until PIP ends
+ *    - If PIP > Hero: Ending screen continues showing with circular PIP speech until PIP ends
  * 4. Ending Screen (raw_clips/ending_clips/)
  */
 
@@ -48,7 +50,7 @@ function getMediaDuration(mediaPath) {
   }
 }
 
-// Generate the 1.5s Opening Title Card ('Day X of Naam Jap')
+// Generate the 1.5s Opening Title Card ('Day X of Naam Jap ✨')
 async function generateOpeningCard(day, outputPath) {
   console.log(`  🎨 Rendering 1.5s Opening Card: 'Day ${day} of Naam Jap'...`);
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
@@ -63,23 +65,22 @@ async function generateOpeningCard(day, outputPath) {
       <body style="margin:0; padding:0; background:transparent; overflow:hidden;">
         <div style="
           position: absolute;
-          top: 360px;
+          top: 520px;
           left: 50%;
           transform: translateX(-50%);
-          background: rgba(14, 14, 20, 0.90);
-          border: 3.5px solid #ffd700;
+          background: rgba(14, 14, 20, 0.94);
+          border: 4px solid #ffd700;
           border-radius: 60px;
-          padding: 22px 58px;
+          padding: 22px 68px;
           color: #ffd700;
           font-family: Outfit, -apple-system, sans-serif;
-          font-size: 54px;
+          font-size: 58px;
           font-weight: 800;
-          letter-spacing: 1.5px;
+          letter-spacing: 2px;
           display: flex;
           align-items: center;
           gap: 16px;
-          box-shadow: 0 12px 40px rgba(0,0,0,0.85);
-          backdrop-filter: blur(12px);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.95);
           white-space: nowrap;
         ">
           Day ${day} of Naam Jap ✨
@@ -143,8 +144,7 @@ async function buildMorningReel(targetDay = null) {
   const titleCardPng = path.join(TEMP_DIR, `day_${day}_title_card.png`);
   await generateOpeningCard(day, titleCardPng);
 
-  // Masks
-  const circleMaskPath = path.join(ASSETS_DIR, 'circle_mask.png');
+  // Borders
   const circleBorderPath = path.join(ASSETS_DIR, 'circle_border.png');
 
   // Output paths
@@ -159,7 +159,7 @@ async function buildMorningReel(targetDay = null) {
   // - If pipDur > heroDur: Hero plays heroDur, then ending screen
   //   keeps showing with PIP speech wrap-up until PIP video ends
   // -------------------------------------------------------------
-  console.log('  ⚙️ Rendering Part 1 (Hero + Circular PIP)...');
+  console.log('  ⚙️ Rendering Part 1 (Hero + Pure Circular PIP + 1.5s Opener)...');
 
   let pipLoopOption = '';
   if (pipDur < heroDur) {
@@ -167,22 +167,23 @@ async function buildMorningReel(targetDay = null) {
     pipLoopOption = '-stream_loop -1';
   }
 
+  // Pure mathematical circular clip using geq:
+  // Radius is 176px from center (180, 180).
+  // Zero square edges!
   const part1Filter = [
     `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[hero_bg]`,
-    `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30[pip_scaled]`,
-    `[2:v]scale=360:360[mask_scaled]`,
-    `[pip_scaled][mask_scaled]alphamerge[pip_circle]`,
+    `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-180,Y-180),176),255,0)'[pip_circle]`,
     `[hero_bg][pip_circle]overlay=${pipX}:${pipY}:shortest=0[with_pip]`,
-    `[3:v]scale=368:368[border_scaled]`,
+    `[2:v]scale=368:368[border_scaled]`,
     `[with_pip][border_scaled]overlay=${borderX}:${borderY}[with_border]`,
-    `[4:v]fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=1.3:d=0.2:alpha=1[card_faded]`,
+    `[3:v]loop=loop=60:size=1:start=0,setpts=PTS-STARTPTS,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=1.3:d=0.2:alpha=1[card_faded]`,
     `[with_border][card_faded]overlay=0:0:enable='between(t,0,1.5)'[v_out]`,
     `[0:a]volume=0.25[a_hero]`,
-    `[1:a]volume=1.0[a_pip]`,
+    `[1:a:0]volume=1.0[a_pip]`,
     `[a_hero][a_pip]amix=inputs=2:duration=first:dropout_transition=2[a_out]`
   ].join(';');
 
-  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempHeroPipPath}"`;
+  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempHeroPipPath}"`;
   execSync(cmdPart1, { stdio: 'inherit' });
   console.log('  ✅ Part 1 rendered successfully.');
 
@@ -195,17 +196,15 @@ async function buildMorningReel(targetDay = null) {
 
     const part2Filter = [
       `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[end_bg]`,
-      `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30[pip_scaled]`,
-      `[2:v]scale=360:360[mask_scaled]`,
-      `[pip_scaled][mask_scaled]alphamerge[pip_circle]`,
+      `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-180,Y-180),176),255,0)'[pip_circle]`,
       `[end_bg][pip_circle]overlay=${pipX}:${pipY}[with_pip]`,
-      `[3:v]scale=368:368[border_scaled]`,
+      `[2:v]scale=368:368[border_scaled]`,
       `[with_pip][border_scaled]overlay=${borderX}:${borderY}[v_out]`,
       `[1:a:0]volume=1.0[a_out]`
     ].join(';');
 
     const endInputFlag = isImageEnding ? `-loop 1 -t ${remDur}` : '';
-    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
+    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleBorderPath}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
     execSync(cmdPart2, { stdio: 'inherit' });
     console.log('  ✅ Part 2 (Ending screen with PIP completion) rendered.');
   } else {
