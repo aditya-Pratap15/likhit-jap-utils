@@ -404,6 +404,11 @@ function resolveRawVideoSource(subfolderDir, seedIndex, contentDuration, outPrep
 
 // --- Main Builder Pipeline ---
 async function buildReel(type = 'challenge', targetId = null) {
+  if (type === 'challenge') {
+    const { buildMorningReel } = require('./build_morning_reel');
+    return await buildMorningReel(targetId);
+  }
+
   console.log('\n======================================================');
   console.log(`🕉️ LIKHIT JAP - REEL STUDIO [MODE: ${type.toUpperCase()}]`);
   console.log('======================================================');

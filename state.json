@@ -1,7 +1,9 @@
-{
-  "currentDay": 3,
-  "currentFeatureIndex": 1,
-  "history": [],
-  "lastPublishedDay": 2,
-  "lastPublishedAt": "2026-10-12T06:38:52.527Z"
+﻿{
+    "currentDay":  1,
+    "currentFeatureIndex":  1,
+    "history":  [
+
+                ],
+    "lastPublishedDay":  2,
+    "lastPublishedAt":  "2026-10-12T06:38:52.527Z"
 }
