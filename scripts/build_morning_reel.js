@@ -10,6 +10,7 @@
  *    - If PIP < Hero: Loops up to the same length as main clip
  *    - If PIP > Hero: Ending screen continues showing with circular PIP speech until PIP ends
  * 4. Ending Screen (raw_clips/ending_clips/)
+ * 5. Background Music: background_music.mp3 looped at 30% audio level across all videos!
  */
 
 const fs = require('fs');
@@ -24,14 +25,18 @@ const HERO_DIR = path.join(RAW_CLIPS_DIR, 'hero_clips');
 const PIP_DIR = path.join(RAW_CLIPS_DIR, 'pip_clips');
 const ENDING_DIR = path.join(RAW_CLIPS_DIR, 'ending_clips');
 const ASSETS_DIR = path.join(PROJECT_ROOT, 'assets');
+const BGM_DIR = path.join(PROJECT_ROOT, 'background_music');
 const REELS_DIR = path.join(PROJECT_ROOT, 'rendered_reels');
 const TEMP_DIR = path.join(PROJECT_ROOT, 'temp_build');
 const STATE_PATH = path.join(PROJECT_ROOT, 'state.json');
 
 // Ensure directories exist
-[HERO_DIR, PIP_DIR, ENDING_DIR, ASSETS_DIR, REELS_DIR, TEMP_DIR].forEach(dir => {
+[HERO_DIR, PIP_DIR, ENDING_DIR, ASSETS_DIR, BGM_DIR, REELS_DIR, TEMP_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
+
+// Dedicated background music path
+const BGM_PATH = path.join(BGM_DIR, 'background_music.mp3');
 
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
@@ -125,6 +130,7 @@ async function buildMorningReel(targetDay = null) {
   console.log(`  🎬 Hero Clip:     ${heroFile}`);
   console.log(`  🟣 Circular PIP:   ${pipFile}`);
   console.log(`  🏁 Ending Screen:  ${endingFile}`);
+  console.log(`  🎵 Looped BGM:     ${path.basename(BGM_PATH)} (Audio Level: 30%)`);
 
   const heroDur = getMediaDuration(heroPath);
   const pipDur = getMediaDuration(pipPath);
@@ -158,8 +164,9 @@ async function buildMorningReel(targetDay = null) {
   // - If pipDur < heroDur: Loop PIP up to hero length
   // - If pipDur > heroDur: Hero plays heroDur, then ending screen
   //   keeps showing with PIP speech wrap-up until PIP video ends
+  // - Background music looped at 30% volume across all segments
   // -------------------------------------------------------------
-  console.log('  ⚙️ Rendering Part 1 (Hero + Pure Circular PIP + 1.5s Opener)...');
+  console.log('  ⚙️ Rendering Part 1 (Hero + Pure Circular PIP + 1.5s Opener + 30% BGM)...');
 
   let pipLoopOption = '';
   if (pipDur < heroDur) {
@@ -170,6 +177,7 @@ async function buildMorningReel(targetDay = null) {
   // Pure mathematical circular clip using geq:
   // Radius is 176px from center (180, 180).
   // Zero square edges!
+  // Audio: Hero pen strokes (20%), PIP voice (100%), BGM loop (30%)
   const part1Filter = [
     `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[hero_bg]`,
     `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-180,Y-180),176),255,0)'[pip_circle]`,
@@ -178,13 +186,14 @@ async function buildMorningReel(targetDay = null) {
     `[with_pip][border_scaled]overlay=${borderX}:${borderY}[with_border]`,
     `[3:v]loop=loop=60:size=1:start=0,setpts=PTS-STARTPTS,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=1.3:d=0.2:alpha=1[card_faded]`,
     `[with_border][card_faded]overlay=0:0:enable='between(t,0,1.5)'[v_out]`,
-    `[0:a]volume=0.25[a_hero]`,
+    `[0:a]volume=0.20[a_hero]`,
     `[1:a:0]volume=1.0[a_pip]`,
-    `[a_hero][a_pip]amix=inputs=2:duration=first:dropout_transition=2[a_out]`
+    `[4:a]volume=0.30[a_bgm]`,
+    `[a_hero][a_pip][a_bgm]amix=inputs=3:duration=first:dropout_transition=2[a_out]`
   ].join(';');
 
-  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempHeroPipPath}"`;
-  execSync(cmdPart1, { stdio: 'inherit' });
+  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -stream_loop -1 -i "${BGM_PATH}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempHeroPipPath}"`;
+  execSync(cmdPart1, { stdio: 'ignore' });
   console.log('  ✅ Part 1 rendered successfully.');
 
   // Part 2: Ending Screen
@@ -192,7 +201,7 @@ async function buildMorningReel(targetDay = null) {
 
   if (pipDur > heroDur) {
     const remDur = pipDur - heroDur;
-    console.log(`  🔊 PIP is longer than Hero by ${remDur.toFixed(1)}s: Keeping ending screen active with PIP completion...`);
+    console.log(`  🔊 PIP is longer than Hero by ${remDur.toFixed(1)}s: Keeping ending screen active with PIP completion + 30% BGM...`);
 
     const part2Filter = [
       `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[end_bg]`,
@@ -200,19 +209,27 @@ async function buildMorningReel(targetDay = null) {
       `[end_bg][pip_circle]overlay=${pipX}:${pipY}[with_pip]`,
       `[2:v]scale=368:368[border_scaled]`,
       `[with_pip][border_scaled]overlay=${borderX}:${borderY}[v_out]`,
-      `[1:a:0]volume=1.0[a_out]`
+      `[1:a:0]volume=1.0[a_pip]`,
+      `[3:a]volume=0.30[a_bgm]`,
+      `[a_pip][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[a_out]`
     ].join(';');
 
     const endInputFlag = isImageEnding ? `-loop 1 -t ${remDur}` : '';
-    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleBorderPath}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
-    execSync(cmdPart2, { stdio: 'inherit' });
-    console.log('  ✅ Part 2 (Ending screen with PIP completion) rendered.');
+    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleBorderPath}" -stream_loop -1 -ss ${heroDur} -t ${remDur} -i "${BGM_PATH}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
+    execSync(cmdPart2, { stdio: 'ignore' });
+    console.log('  ✅ Part 2 (Ending screen with PIP completion & continuous BGM) rendered.');
   } else {
     const outroDur = 4.5;
-    console.log(`  🏁 Rendering clean ${outroDur}s ending outro...`);
+    console.log(`  🏁 Rendering clean ${outroDur}s ending outro with BGM fade...`);
+
+    const part2Filter = [
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[v_out]`,
+      `[1:a]volume=0.30,afade=t=out:st=3.0:d=1.5[a_out]`
+    ].join(';');
+
     const endInputFlag = isImageEnding ? `-loop 1 -t ${outroDur}` : `-t ${outroDur}`;
-    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30" -t ${outroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
-    execSync(cmdPart2, { stdio: 'inherit' });
+    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -stream_loop -1 -ss ${heroDur} -t ${outroDur} -i "${BGM_PATH}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
+    execSync(cmdPart2, { stdio: 'ignore' });
     console.log('  ✅ Part 2 rendered.');
   }
 
@@ -221,7 +238,7 @@ async function buildMorningReel(targetDay = null) {
   const concatList = path.join(TEMP_DIR, `concat_${day}.txt`);
   fs.writeFileSync(concatList, `file '${tempHeroPipPath.replace(/\\/g, '/')}'\nfile '${tempEndingPath.replace(/\\/g, '/')}'`, 'utf8');
 
-  execSync(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -movflags +faststart "${finalReelPath}"`, { stdio: 'inherit' });
+  execSync(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -movflags +faststart "${finalReelPath}"`, { stdio: 'ignore' });
 
   // Cleanup temp files
   try {
