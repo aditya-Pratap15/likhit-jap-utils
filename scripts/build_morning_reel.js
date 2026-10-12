@@ -168,8 +168,8 @@ async function buildMorningReel(targetDay = null) {
   }
 
   const part1Filter = [
-    `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[hero_bg]`,
-    `[1:v]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p[pip_scaled]`,
+    `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[hero_bg]`,
+    `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30[pip_scaled]`,
     `[2:v]scale=360:360[mask_scaled]`,
     `[pip_scaled][mask_scaled]alphamerge[pip_circle]`,
     `[hero_bg][pip_circle]overlay=${pipX}:${pipY}:shortest=0[with_pip]`,
@@ -182,8 +182,8 @@ async function buildMorningReel(targetDay = null) {
     `[a_hero][a_pip]amix=inputs=2:duration=first:dropout_transition=2[a_out]`
   ].join(';');
 
-  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k "${tempHeroPipPath}"`;
-  execSync(cmdPart1, { stdio: 'ignore' });
+  const cmdPart1 = `ffmpeg -y -i "${heroPath}" ${pipLoopOption} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -i "${titleCardPng}" -filter_complex "${part1Filter}" -map "[v_out]" -map "[a_out]" -t ${heroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempHeroPipPath}"`;
+  execSync(cmdPart1, { stdio: 'inherit' });
   console.log('  ✅ Part 1 rendered successfully.');
 
   // Part 2: Ending Screen
@@ -194,26 +194,26 @@ async function buildMorningReel(targetDay = null) {
     console.log(`  🔊 PIP is longer than Hero by ${remDur.toFixed(1)}s: Keeping ending screen active with PIP completion...`);
 
     const part2Filter = [
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[end_bg]`,
-      `[1:v]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p[pip_scaled]`,
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30[end_bg]`,
+      `[1:v:0]scale=360:360:force_original_aspect_ratio=increase,crop=360:360,format=yuva420p,fps=30[pip_scaled]`,
       `[2:v]scale=360:360[mask_scaled]`,
       `[pip_scaled][mask_scaled]alphamerge[pip_circle]`,
       `[end_bg][pip_circle]overlay=${pipX}:${pipY}[with_pip]`,
       `[3:v]scale=368:368[border_scaled]`,
       `[with_pip][border_scaled]overlay=${borderX}:${borderY}[v_out]`,
-      `[1:a]volume=1.0[a_out]`
+      `[1:a:0]volume=1.0[a_out]`
     ].join(';');
 
     const endInputFlag = isImageEnding ? `-loop 1 -t ${remDur}` : '';
-    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k "${tempEndingPath}"`;
-    execSync(cmdPart2, { stdio: 'ignore' });
+    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -ss ${heroDur} -t ${remDur} -i "${pipPath}" -i "${circleMaskPath}" -i "${circleBorderPath}" -filter_complex "${part2Filter}" -map "[v_out]" -map "[a_out]" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
+    execSync(cmdPart2, { stdio: 'inherit' });
     console.log('  ✅ Part 2 (Ending screen with PIP completion) rendered.');
   } else {
     const outroDur = 4.5;
     console.log(`  🏁 Rendering clean ${outroDur}s ending outro...`);
     const endInputFlag = isImageEnding ? `-loop 1 -t ${outroDur}` : `-t ${outroDur}`;
-    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -t ${outroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k "${tempEndingPath}"`;
-    execSync(cmdPart2, { stdio: 'ignore' });
+    const cmdPart2 = `ffmpeg -y ${endInputFlag} -i "${endingPath}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30" -t ${outroDur} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -ar 44100 "${tempEndingPath}"`;
+    execSync(cmdPart2, { stdio: 'inherit' });
     console.log('  ✅ Part 2 rendered.');
   }
 
@@ -222,7 +222,7 @@ async function buildMorningReel(targetDay = null) {
   const concatList = path.join(TEMP_DIR, `concat_${day}.txt`);
   fs.writeFileSync(concatList, `file '${tempHeroPipPath.replace(/\\/g, '/')}'\nfile '${tempEndingPath.replace(/\\/g, '/')}'`, 'utf8');
 
-  execSync(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "${finalReelPath}"`, { stdio: 'ignore' });
+  execSync(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 30 -c:a aac -b:a 128k -movflags +faststart "${finalReelPath}"`, { stdio: 'inherit' });
 
   // Cleanup temp files
   try {
