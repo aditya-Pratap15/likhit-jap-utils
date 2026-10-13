@@ -21,6 +21,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   run-engine:
     runs-on: ubuntu-latest
@@ -98,4 +101,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           git add state.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-progress: Likhit Jap dual state advanced [skip ci]" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-progress: Likhit Jap dual state advanced [skip ci]" && git push) || echo State push bypassed
