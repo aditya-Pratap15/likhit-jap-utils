@@ -76,7 +76,7 @@ async function renderOverlay(itemData, isFeature, outputPath) {
   console.log(`  🎨 Rendering typography overlay (${isFeature ? 'App Feature' : 'Sacred Challenge'})...`);
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });
@@ -240,7 +240,7 @@ async function renderOverlay(itemData, isFeature, outputPath) {
 async function renderOutroCard(outputPath) {
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });

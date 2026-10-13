@@ -58,7 +58,7 @@ function getMediaDuration(mediaPath) {
 // Generate the 1.5s Opening Title Card ('Day X of Naam Jap ✨')
 async function generateOpeningCard(day, outputPath) {
   console.log(`  🎨 Rendering 1.5s Opening Card: 'Day ${day} of Naam Jap'...`);
-  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });
   await page.setContent(`
