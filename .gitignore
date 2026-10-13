@@ -7,21 +7,6 @@ rendered_reels/*.mp4
 temp_assets/
 temp_build/
 
-# Heavy video and audio assets
-raw_clips/**/*.mp4
-raw_clips/**/*.mov
-raw_clips/**/*.mkv
-raw_clips/**/*.webm
-raw_clips/*.mp4
-raw_clips/*.mov
-!raw_clips/.gitkeep
-!raw_clips/morning_challenge/.gitkeep
-!raw_clips/night_showcase/.gitkeep
-
-background_music/*.mp3
-background_music/*.wav
-!background_music/.gitkeep
-
 # Private Master Blueprint Documentation (Never pushed to GitHub)
 *Guide*.md
 *RULE*.md
