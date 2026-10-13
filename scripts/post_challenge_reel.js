@@ -118,8 +118,9 @@ async function publishFacebookReel(videoPath, description) {
         'Authorization': `OAuth ${FB_TOKEN}`,
         'offset': '0',
         'file_size': fileSize.toString(),
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': fileSize
+        'Content-Length': fileSize.toString(),
+        'X-Entity-Length': fileSize.toString(),
+        'Content-Type': 'application/octet-stream'
       }
     }, res => {
       let data = '';
@@ -360,7 +361,10 @@ async function publishInstagramReel(videoPath, caption) {
       headers: {
         'Authorization': `OAuth ${token}`,
         'offset': '0',
-        'file_size': fileSize.toString()
+        'file_size': fileSize.toString(),
+        'Content-Length': fileSize.toString(),
+        'X-Entity-Length': fileSize.toString(),
+        'Content-Type': 'application/octet-stream'
       }
     }, res => {
       let data = '';
