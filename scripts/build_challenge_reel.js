@@ -409,6 +409,11 @@ async function buildReel(type = 'challenge', targetId = null) {
     return await buildMorningReel(targetId);
   }
 
+  if (type === 'feature') {
+    const { buildNightReel } = require('./build_night_reel');
+    return await buildNightReel(targetId);
+  }
+
   console.log('\n======================================================');
   console.log(`🕉️ LIKHIT JAP - REEL STUDIO [MODE: ${type.toUpperCase()}]`);
   console.log('======================================================');
