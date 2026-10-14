@@ -1,7 +1,8 @@
 {
   "currentDay": 3,
-  "currentFeatureIndex": 1,
+  "currentFeatureIndex": 2,
   "history": [],
   "lastPublishedDay": 2,
-  "lastPublishedAt": "2026-10-14T05:04:40.501Z"
+  "lastPublishedAt": "2026-10-14T20:14:18.107Z",
+  "lastPublishedFeatureId": 1
 }
