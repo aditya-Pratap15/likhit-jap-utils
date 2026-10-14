@@ -1,6 +1,8 @@
 ﻿name: Likhit Jap Dual-Drop Automation Engine
 
 on:
+  repository_dispatch:
+    types: [likhit_drop, likhit_morning, likhit_night]
   schedule:
     # Drop 1: 06:30 AM IST (01:00 AM UTC) - Morning Devotional Challenge Reel
     - cron: '0 1 * * *'
@@ -53,6 +55,25 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
             echo "target_id=${{ github.event.inputs.target_id }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            ACTION="${{ github.event.action }}"
+            PAYLOAD_TYPE="${{ github.event.client_payload.type }}"
+            PAYLOAD_TARGET="${{ github.event.client_payload.target_id }}"
+            if [ -n "$PAYLOAD_TYPE" ]; then
+              echo "type=$PAYLOAD_TYPE" >> $GITHUB_OUTPUT
+            elif [ "$ACTION" = "likhit_morning" ]; then
+              echo "type=challenge" >> $GITHUB_OUTPUT
+            elif [ "$ACTION" = "likhit_night" ]; then
+              echo "type=feature" >> $GITHUB_OUTPUT
+            else
+              HOUR=$(date -u +%H)
+              if [ "$HOUR" -ge "12" ]; then
+                echo "type=feature" >> $GITHUB_OUTPUT
+              else
+                echo "type=challenge" >> $GITHUB_OUTPUT
+              fi
+            fi
+            echo "target_id=$PAYLOAD_TARGET" >> $GITHUB_OUTPUT
           else
             # Automated cron schedule: determine by UTC hour
             HOUR=$(date -u +%H)
