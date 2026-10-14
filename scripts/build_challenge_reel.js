@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
-const { EdgeTTS, Constants } = require('@andresaya/edge-tts');
+const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
 // --- Paths & Constants ---
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -58,17 +58,36 @@ function getMediaDuration(mediaPath) {
   }
 }
 
-async function generateHindiVoice(text, outputPath) {
-  const tts = new EdgeTTS();
+async function generateHindiVoice(rawText, outputPath, maxRetries = 3) {
+  const text = (rawText || '').replace(/&/g, ' और ').replace(/[<>]/g, '').trim();
   const voice = 'hi-IN-MadhurNeural';
-  console.log(`  🎙️ Synthesizing sacred Hindi narration (${voice})...`);
-  await tts.synthesize(text, voice, {
-    outputFormat: Constants.OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3
-  });
-  fs.writeFileSync(outputPath, tts.toBuffer());
-  const duration = getMediaDuration(outputPath);
-  console.log(`  ✅ Voiceover generated: ${duration.toFixed(2)}s`);
-  return duration;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`  🎙️ Synthesizing sacred Hindi narration (${voice}) [Attempt ${attempt}/${maxRetries}]...`);
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+
+      const audioChunks = [];
+      await new Promise((resolve, reject) => {
+        const { audioStream } = tts.toStream(text);
+        audioStream.on('data', chunk => audioChunks.push(chunk));
+        audioStream.on('end', resolve);
+        audioStream.on('error', reject);
+      });
+
+      const buffer = Buffer.concat(audioChunks);
+      if (buffer.length === 0) throw new Error('Received empty audio buffer from TTS service');
+      fs.writeFileSync(outputPath, buffer);
+      const duration = getMediaDuration(outputPath);
+      console.log(`  ✅ Voiceover generated: ${duration.toFixed(2)}s`);
+      return duration;
+    } catch (err) {
+      console.warn(`  [!] Hindi TTS Attempt ${attempt} failed: ${err.message}`);
+      if (attempt === maxRetries) throw err;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
 }
 
 // Render Typography Overlay for Challenge or Feature
