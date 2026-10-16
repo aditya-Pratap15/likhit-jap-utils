@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 🕉️ LIKHIT JAP - DUAL REEL DISPATCHER & VIDEO ENGINE
+ * 🎬 LIKHIT JAP - DUAL REEL DISPATCHER & VIDEO ENGINE
  * -----------------------------------------------------------------------
  * Automated Daily 9:16 Video Generator supporting Dual-Drop Cadence:
  * 1. Morning Slot (--type challenge): 108-Day Sacred Challenge Reel (Day 1..108)
@@ -12,10 +12,34 @@
  * Zero synthetic TTS is used or required.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { buildMorningReel } = require('./build_morning_reel');
 const { buildNightReel } = require('./build_night_reel');
 
 async function buildReel(type = 'challenge', targetId = null) {
+  const isForce = process.argv.includes('--force');
+  const statePath = path.join(__dirname, '..', 'state.json');
+
+  if (fs.existsSync(statePath) && !isForce && !targetId) {
+    try {
+      const raw = fs.readFileSync(statePath, 'utf8').replace(/^\uFEFF/, '').trim();
+      const state = JSON.parse(raw);
+      const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+      if (type === 'challenge' && state.lastPublishedChallengeDate === todayIst) {
+        console.log(`[🛡️ Likhit Daily Cadence Guard] Challenge Reel Day ${state.lastPublishedDay} has ALREADY been published today (${todayIst}). Skipping video build to prevent premature generation.`);
+        return null;
+      }
+      if (type === 'feature' && state.lastPublishedFeatureDate === todayIst) {
+        console.log(`[🛡️ Likhit Daily Cadence Guard] Feature Reel #${state.lastPublishedFeatureId} has ALREADY been published tonight (${todayIst}). Skipping video build.`);
+        return null;
+      }
+    } catch(e) {
+      console.warn('⚠️ Warning checking cadence state in build:', e.message);
+    }
+  }
+
   if (type === 'challenge') {
     return await buildMorningReel(targetId);
   }

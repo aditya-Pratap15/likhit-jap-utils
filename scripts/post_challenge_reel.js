@@ -48,8 +48,11 @@ function formatUnicodeBold(text) {
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
     try {
-      return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
-    } catch (e) {}
+      const content = fs.readFileSync(STATE_PATH, 'utf8').replace(/^\uFEFF/, '').trim();
+      return JSON.parse(content);
+    } catch (e) {
+      console.error('⚠️ Warning: Failed to parse state.json:', e.message);
+    }
   }
   return { currentDay: 1, currentFeatureIndex: 1, history: [] };
 }
@@ -461,6 +464,26 @@ async function publishReel(type = 'challenge', targetId = null) {
 
   const state = loadState();
   const isFeature = type === 'feature';
+  const isForce = process.argv.includes('--force');
+  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+  // -------------------------------------------------------------
+  // DAILY CADENCE GUARD: Prevent premature/duplicate publishing
+  // -------------------------------------------------------------
+  if (!isForce && !targetId) {
+    if (!isFeature && state.lastPublishedChallengeDate === todayIst) {
+      console.log(`\n[🛡️ Likhit Daily Cadence Guard] Today's Challenge Reel (Day ${state.lastPublishedDay}) has ALREADY been published on ${todayIst}!`);
+      console.log(`   ⏭️ Skipping execution to prevent premature publishing of future reels!`);
+      console.log(`   Day ${state.currentDay} will automatically publish tomorrow morning at 06:30 AM IST.`);
+      return { skipped: true, reason: 'Challenge already published today' };
+    }
+    if (isFeature && state.lastPublishedFeatureDate === todayIst) {
+      console.log(`\n[🛡️ Likhit Daily Cadence Guard] Today's Night Feature Reel (#${state.lastPublishedFeatureId}) has ALREADY been published tonight on ${todayIst}!`);
+      console.log(`   ⏭️ Skipping execution to prevent duplicate night publishing.`);
+      console.log(`   Next feature showcase reel will automatically publish tomorrow night at 09:45 PM IST.`);
+      return { skipped: true, reason: 'Feature already published tonight' };
+    }
+  }
 
   let itemData = null;
   let reelFileName = '';
@@ -499,16 +522,18 @@ async function publishReel(type = 'challenge', targetId = null) {
   // 3. YouTube Shorts
   await publishYouTubeShort(reelPath, formattedTitle, formattedCaption);
 
-  // Update State
+    // Update State with Daily Cadence Guard Dates
   if (isFeature) {
     const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
     state.lastPublishedFeatureId = itemData.id;
+    state.lastPublishedFeatureDate = todayIst;
     state.currentFeatureIndex = (itemData.id % featuresList.length) + 1;
-    console.log(`âœ¨ Advanced next feature index to: #${state.currentFeatureIndex}`);
+    console.log(`✨ Advanced next feature index to: #${state.currentFeatureIndex}`);
   } else {
     state.lastPublishedDay = itemData.day;
+    state.lastPublishedChallengeDate = todayIst;
     state.currentDay = (itemData.day % 108) + 1;
-    console.log(`âœ¨ Advanced next challenge day to: Day ${state.currentDay}`);
+    console.log(`✨ Advanced next challenge day to: Day ${state.currentDay}`);
   }
   state.lastPublishedAt = new Date().toISOString();
   saveState(state);
