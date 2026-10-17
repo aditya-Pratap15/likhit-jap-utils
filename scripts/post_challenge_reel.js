@@ -564,7 +564,23 @@ async function publishReel(type = 'challenge', targetId = null, options = {}) {
     // 2. YouTube Shorts (Pre-scheduled with publishAt)
     const ytRes = await publishYouTubeShort(reelPath, formattedTitle, formattedCaption, schedTimeSec);
 
-    // 3. Instagram Reels: Skip during morning run, stage video for night drop
+    // 3. Instagram Reels
+    if (!schedTimeSec) {
+      console.log('  📸 Executing live Instagram publish since target schedule time has already passed or is within 10 minutes...');
+      await publishInstagramReel(reelPath, formattedCaption);
+      const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
+      state.lastPublishedFeatureId = itemData.id;
+      state.lastPublishedFeatureDate = todayIst;
+      state.currentFeatureIndex = (itemData.id % featuresList.length) + 1;
+      state.lastPublishedAt = new Date().toISOString();
+      delete state.scheduledFeatureId;
+      delete state.scheduledFeatureDate;
+      delete state.scheduledFeatureTime;
+      saveState(state);
+      console.log(`✨ Advanced next feature index to: #${state.currentFeatureIndex}`);
+      return { success: true, featureId: itemData.id, liveFallback: true };
+    }
+
     console.log('  ⏭️ Staging Feature Reel for Night Instagram Drop at 09:45 PM IST (Instagram Graph API requires live publishing).');
     try {
       if (reelPath !== stagedPath) {
