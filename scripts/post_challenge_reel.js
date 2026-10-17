@@ -64,7 +64,7 @@ function saveState(state) {
 /**
  * 1. Publish to Facebook Reels
  */
-async function publishFacebookReel(videoPath, description) {
+async function publishFacebookReel(videoPath, description, scheduledPublishTime = null) {
   const cleanDescription = formatUnicodeBold(description);
   if (!FB_PAGE_ID || !FB_TOKEN) {
     console.log('  âš ï¸ Skipping Facebook Reel: FACEBOOK_PAGE_ID or FACEBOOK_PAGE_ACCESS_TOKEN not set.');
@@ -142,7 +142,8 @@ async function publishFacebookReel(videoPath, description) {
     access_token: FB_TOKEN,
     upload_phase: 'finish',
     video_id: startRes.video_id,
-    video_state: 'PUBLISHED',
+    video_state: scheduledPublishTime ? 'SCHEDULED' : 'PUBLISHED',
+    ...(scheduledPublishTime ? { scheduled_publish_time: String(scheduledPublishTime) } : {}),
     description: cleanDescription
   }).toString();
 
@@ -175,7 +176,7 @@ async function publishFacebookReel(videoPath, description) {
 /**
  * 2. Publish to YouTube Shorts
  */
-async function publishYouTubeShort(videoPath, title, description) {
+async function publishYouTubeShort(videoPath, title, description, scheduledPublishTime = null) {
   const cleanTitle = formatUnicodeBold(title);
   const cleanDescription = formatUnicodeBold(description);
   if (!YT_CLIENT_ID || !YT_CLIENT_SECRET || !YT_REFRESH_TOKEN) {
@@ -222,7 +223,12 @@ async function publishYouTubeShort(videoPath, title, description) {
       tags: ['LikhitJap', 'Shorts', 'NaamJap', 'RadhaNaam', 'MentalPeace', 'SpiritualIndia'],
       categoryId: '22'
     },
-    status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+    status: (() => {
+      const isSched = scheduledPublishTime && (scheduledPublishTime > Math.floor(Date.now() / 1000) + 600);
+      const st = { privacyStatus: isSched ? 'private' : 'public', selfDeclaredMadeForKids: false };
+      if (isSched) st.publishAt = new Date(scheduledPublishTime * 1000).toISOString();
+      return st;
+    })()
   });
 
   const videoBuf = fs.readFileSync(videoPath);
@@ -457,15 +463,20 @@ async function publishInstagramReel(videoPath, caption) {
 }
 
 // --- Main Publisher ---
-async function publishReel(type = 'challenge', targetId = null) {
+async function publishReel(type = 'challenge', targetId = null, options = {}) {
+  const isFeature = type === 'feature';
+  const isForce = options.force || process.argv.includes('--force');
+  const isPreSchedule = options.schedule || process.argv.includes('--schedule') || process.argv.includes('--pre-schedule');
+  const isInstagramOnly = options.instagramOnly || process.argv.includes('--instagram-only');
+  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
   console.log('\n======================================================');
-  console.log(`ðŸ“¡ LIKHIT JAP - MULTI-PLATFORM PUBLISHER [${type.toUpperCase()}]`);
+  console.log(`📡 LIKHIT JAP - MULTI-PLATFORM PUBLISHER [${type.toUpperCase()}]`);
+  if (isPreSchedule) console.log('🗓️  MODE: PRE-SCHEDULING NIGHT DROP (Facebook Planner + YouTube Shorts)');
+  if (isInstagramOnly) console.log('📸 MODE: INSTAGRAM EXCLUSIVE DROP (Night Slot)');
   console.log('======================================================');
 
   const state = loadState();
-  const isFeature = type === 'feature';
-  const isForce = process.argv.includes('--force');
-  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   // -------------------------------------------------------------
   // DAILY CADENCE GUARD: Prevent premature/duplicate publishing
@@ -477,11 +488,18 @@ async function publishReel(type = 'challenge', targetId = null) {
       console.log(`   Day ${state.currentDay} will automatically publish tomorrow morning at 06:30 AM IST.`);
       return { skipped: true, reason: 'Challenge already published today' };
     }
-    if (isFeature && state.lastPublishedFeatureDate === todayIst) {
-      console.log(`\n[🛡️ Likhit Daily Cadence Guard] Today's Night Feature Reel (#${state.lastPublishedFeatureId}) has ALREADY been published tonight on ${todayIst}!`);
-      console.log(`   ⏭️ Skipping execution to prevent duplicate night publishing.`);
-      console.log(`   Next feature showcase reel will automatically publish tomorrow night at 09:45 PM IST.`);
-      return { skipped: true, reason: 'Feature already published tonight' };
+    if (isFeature) {
+      if (isPreSchedule && (state.scheduledFeatureDate === todayIst || state.lastPublishedFeatureDate === todayIst)) {
+        console.log(`\n[🛡️ Likhit Daily Cadence Guard] Today's Night Feature Reel (#${state.scheduledFeatureId || state.lastPublishedFeatureId}) has ALREADY been scheduled/published for ${todayIst}!`);
+        console.log(`   ⏭️ Skipping pre-scheduling to prevent duplicate drops.`);
+        return { skipped: true, reason: 'Feature already scheduled/published for today' };
+      }
+      if (!isPreSchedule && state.lastPublishedFeatureDate === todayIst) {
+        console.log(`\n[🛡️ Likhit Daily Cadence Guard] Today's Night Feature Reel (#${state.lastPublishedFeatureId}) has ALREADY been published tonight on ${todayIst}!`);
+        console.log(`   ⏭️ Skipping execution to prevent duplicate night publishing.`);
+        console.log(`   Next feature showcase reel will automatically publish tomorrow night at 09:45 PM IST.`);
+        return { skipped: true, reason: 'Feature already published tonight' };
+      }
     }
   }
 
@@ -491,7 +509,8 @@ async function publishReel(type = 'challenge', targetId = null) {
 
   if (isFeature) {
     const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
-    const featId = targetId || state.currentFeatureIndex || 1;
+    // If it's night instagram-only drop and scheduledFeatureId exists, prioritize that scheduled ID
+    const featId = targetId || (isInstagramOnly && state.scheduledFeatureId ? state.scheduledFeatureId : state.currentFeatureIndex) || 1;
     itemData = featuresList.find(f => f.id === featId) || featuresList[0];
     reelFileName = `Feature_${String(itemData.id).padStart(2, '0')}_LikhitJap_Reel.mp4`;
     shortTitle = `Likhit Jap: ${itemData.badge} #Shorts #LikhitJap`;
@@ -503,31 +522,137 @@ async function publishReel(type = 'challenge', targetId = null) {
     shortTitle = `Daily Naam Jap — Day ${itemData.day} ✨ #Shorts #LikhitJap #NaamJap`;
   }
 
-  const reelPath = path.join(REELS_DIR, reelFileName);
-  if (!fs.existsSync(reelPath)) {
-    throw new Error(`Reel video not found at ${reelPath}. Run build first!`);
+  // Look for video file: check staged_feature_reel.mp4 first if night instagram-only, else standard reelPath
+  let reelPath = path.join(REELS_DIR, reelFileName);
+  const stagedPath = path.join(REELS_DIR, 'staged_feature_reel.mp4');
+  if (isFeature && isInstagramOnly && fs.existsSync(stagedPath)) {
+    reelPath = stagedPath;
+    console.log(`📁 Using staged night reel: ${stagedPath}`);
+  } else if (!fs.existsSync(reelPath)) {
+    if (isFeature && fs.existsSync(stagedPath)) {
+      reelPath = stagedPath;
+    } else {
+      throw new Error(`Reel video not found at ${reelPath}. Run build first!`);
+    }
   }
 
-  console.log(`ðŸš€ Publishing Reel: ${reelFileName}`);
+  console.log(`🚀 Processing Reel: ${path.basename(reelPath)}`);
 
   const formattedCaption = formatUnicodeBold(itemData.caption);
   const formattedTitle = formatUnicodeBold(shortTitle);
 
-  // 1. Facebook Reels
-  await publishFacebookReel(reelPath, formattedCaption);
+  // -------------------------------------------------------------
+  // PRE-SCHEDULE NIGHT DROP (Facebook Planner + YouTube Shorts)
+  // -------------------------------------------------------------
+  if (isFeature && isPreSchedule) {
+    const now = new Date();
+    // 21:45 IST on today's IST date (16:15 UTC)
+    const targetDate = new Date(`${todayIst}T21:45:00+05:30`);
+    let schedTimeSec = Math.floor(targetDate.getTime() / 1000);
+    const nowSec = Math.floor(now.getTime() / 1000);
 
-  // 2. Instagram Reels
-  await publishInstagramReel(reelPath, formattedCaption);
+    if (schedTimeSec <= nowSec + 600) {
+      console.warn(`⚠️ [Pre-Schedule] Target time (${targetDate.toISOString()}) is not >= 10m in the future. Falling back to live mode.`);
+      schedTimeSec = null;
+    }
 
-  // 3. YouTube Shorts
-  await publishYouTubeShort(reelPath, formattedTitle, formattedCaption);
+    console.log(`\n📅 Pre-Scheduling Night Drop for 09:45 PM IST (${targetDate.toISOString()})...`);
 
-    // Update State with Daily Cadence Guard Dates
+    // 1. Facebook Reels (Pre-scheduled into Page Planner)
+    const fbRes = await publishFacebookReel(reelPath, formattedCaption, schedTimeSec);
+
+    // 2. YouTube Shorts (Pre-scheduled with publishAt)
+    const ytRes = await publishYouTubeShort(reelPath, formattedTitle, formattedCaption, schedTimeSec);
+
+    // 3. Instagram Reels: Skip during morning run, stage video for night drop
+    console.log('  ⏭️ Staging Feature Reel for Night Instagram Drop at 09:45 PM IST (Instagram Graph API requires live publishing).');
+    try {
+      if (reelPath !== stagedPath) {
+        fs.copyFileSync(reelPath, stagedPath);
+        console.log(`  💾 Staged night video created at ${stagedPath}`);
+      }
+    } catch(err) {
+      console.warn('  ⚠️ Note: Could not copy to stagedPath:', err.message);
+    }
+
+    // Update state with scheduled metadata
+    state.scheduledFeatureId = itemData.id;
+    state.scheduledFeatureDate = todayIst;
+    state.scheduledFeatureTime = targetDate.toISOString();
+    state.scheduledFbPostId = fbRes && fbRes.videoId ? fbRes.videoId : null;
+    state.scheduledYtVideoId = ytRes && ytRes.videoId ? ytRes.videoId : null;
+    state.lastScheduledAt = new Date().toISOString();
+    saveState(state);
+
+    console.log('\n🎉 Night Feature Reel Pre-Scheduling Complete!\n');
+    return { scheduled: true, featureId: itemData.id, scheduledTime: targetDate.toISOString() };
+  }
+
+  // -------------------------------------------------------------
+  // NIGHT DROP: Instagram Exclusive Live Publish
+  // -------------------------------------------------------------
+  if (isFeature && isInstagramOnly) {
+    console.log(`\n📸 Publishing Night Feature Reel to Instagram...`);
+    const igRes = await publishInstagramReel(reelPath, formattedCaption);
+
+    // Clean up staged reel if it exists
+    if (fs.existsSync(stagedPath)) {
+      try {
+        fs.unlinkSync(stagedPath);
+        console.log('  🧹 Cleaned up staged night reel file.');
+      } catch(e) {}
+    }
+
+    // Update state to mark feature complete for tonight
+    const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
+    state.lastPublishedFeatureId = itemData.id;
+    state.lastPublishedFeatureDate = todayIst;
+    state.currentFeatureIndex = (itemData.id % featuresList.length) + 1;
+    state.lastPublishedAt = new Date().toISOString();
+    delete state.scheduledFeatureId;
+    delete state.scheduledFeatureDate;
+    delete state.scheduledFeatureTime;
+    delete state.scheduledFbPostId;
+    delete state.scheduledYtVideoId;
+    saveState(state);
+
+    console.log(`✨ Advanced next feature index to: #${state.currentFeatureIndex}`);
+    console.log('\n🎉 Night Instagram drop complete!\n');
+    return { success: true, igRes };
+  }
+
+  // -------------------------------------------------------------
+  // STANDARD LIVE PUBLISH (FB + IG + YT)
+  // -------------------------------------------------------------
+  // If this is a feature reel and it was ALREADY pre-scheduled on FB/YT today, only do IG:
+  if (isFeature && state.scheduledFeatureDate === todayIst && !isForce) {
+    console.log(`ℹ️ Feature #${itemData.id} was already pre-scheduled on Facebook & YouTube for today (${todayIst}). Publishing ONLY to Instagram to avoid duplicate posting...`);
+    await publishInstagramReel(reelPath, formattedCaption);
+    if (fs.existsSync(stagedPath)) {
+      try { fs.unlinkSync(stagedPath); } catch(e) {}
+    }
+  } else {
+    // 1. Facebook Reels
+    await publishFacebookReel(reelPath, formattedCaption);
+
+    // 2. Instagram Reels
+    await publishInstagramReel(reelPath, formattedCaption);
+
+    // 3. YouTube Shorts
+    await publishYouTubeShort(reelPath, formattedTitle, formattedCaption);
+  }
+
+  // Update State with Daily Cadence Guard Dates
   if (isFeature) {
     const featuresList = JSON.parse(fs.readFileSync(FEATURES_PATH, 'utf8'));
     state.lastPublishedFeatureId = itemData.id;
     state.lastPublishedFeatureDate = todayIst;
     state.currentFeatureIndex = (itemData.id % featuresList.length) + 1;
+    delete state.scheduledFeatureId;
+    delete state.scheduledFeatureDate;
+    delete state.scheduledFeatureTime;
+    delete state.scheduledFbPostId;
+    delete state.scheduledYtVideoId;
     console.log(`✨ Advanced next feature index to: #${state.currentFeatureIndex}`);
   } else {
     state.lastPublishedDay = itemData.day;
@@ -538,7 +663,7 @@ async function publishReel(type = 'challenge', targetId = null) {
   state.lastPublishedAt = new Date().toISOString();
   saveState(state);
 
-  console.log('\nðŸ Publishing cycle complete!\n');
+  console.log('\n🎉 Publishing cycle complete!\n');
 }
 
 if (require.main === module) {
@@ -556,8 +681,14 @@ if (require.main === module) {
     targetId = parseInt(args[idIdx + 1], 10);
   }
 
-  publishReel(type, targetId).catch(err => {
-    console.error('âŒ Publishing error:', err);
+  const options = {
+    schedule: args.includes('--schedule') || args.includes('--pre-schedule'),
+    instagramOnly: args.includes('--instagram-only'),
+    force: args.includes('--force')
+  };
+
+  publishReel(type, targetId, options).catch(err => {
+    console.error('❌ Publishing error:', err);
     process.exit(1);
   });
 }

@@ -4,24 +4,35 @@ on:
   repository_dispatch:
     types: [likhit_drop, likhit_morning, likhit_night]
   schedule:
-    # Drop 1: 06:30 AM IST (01:00 AM UTC) - Morning Devotional Challenge Reel
+    # Drop 1: 06:30 AM IST (01:00 AM UTC) - Morning Devotional Challenge Reel + Pre-Schedule Night Drop
     - cron: '0 1 * * *'
-    # Drop 2: 09:45 PM IST (04:15 PM UTC) - Night App Showcase & Mental Peace Reel
+    # Drop 2: 09:45 PM IST (04:15 PM UTC) - Night App Showcase & Mental Peace Reel (Instagram Drop)
     - cron: '15 16 * * *'
   workflow_dispatch:
     inputs:
       type:
-        description: 'Reel Type: "challenge" (Morning 108 Challenge) or "feature" (Night Showcase)'
+        description: 'Action: "morning_batch" (Full Day), "challenge" (Morning Reel), or "feature" (Night Reel)'
         required: true
-        default: 'challenge'
+        default: 'morning_batch'
         type: choice
         options:
+          - morning_batch
           - challenge
           - feature
       target_id:
         description: 'Target ID (Day 1-108 or Feature 1-6, leave blank for auto)'
         required: false
         default: ''
+      mode:
+        description: 'Publish Mode: "auto", "live", "schedule", or "instagram-only"'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - live
+          - schedule
+          - instagram-only
 
 permissions:
   contents: write
@@ -49,57 +60,58 @@ jobs:
       - name: Install NPM Dependencies
         run: npm install
 
-      - name: Determine Target Mode
-        id: mode
+      - name: Determine Target Execution Plan
+        id: plan
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
-            echo "target_id=${{ github.event.inputs.target_id }}" >> $GITHUB_OUTPUT
+            TYPE="${{ github.event.inputs.type }}"
+            MODE="${{ github.event.inputs.mode }}"
+            TARGET_ID="${{ github.event.inputs.target_id }}"
+            echo "plan=$TYPE" >> $GITHUB_OUTPUT
+            echo "mode=$MODE" >> $GITHUB_OUTPUT
+            echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             ACTION="${{ github.event.action }}"
             PAYLOAD_TYPE="${{ github.event.client_payload.type }}"
+            PAYLOAD_MODE="${{ github.event.client_payload.mode || 'auto' }}"
             PAYLOAD_TARGET="${{ github.event.client_payload.target_id }}"
-            if [ -n "$PAYLOAD_TYPE" ]; then
-              echo "type=$PAYLOAD_TYPE" >> $GITHUB_OUTPUT
-            elif [ "$ACTION" = "likhit_morning" ]; then
-              echo "type=challenge" >> $GITHUB_OUTPUT
+            if [ "$ACTION" = "likhit_morning" ]; then
+              echo "plan=morning_batch" >> $GITHUB_OUTPUT
             elif [ "$ACTION" = "likhit_night" ]; then
-              echo "type=feature" >> $GITHUB_OUTPUT
+              echo "plan=night_drop" >> $GITHUB_OUTPUT
+            elif [ -n "$PAYLOAD_TYPE" ]; then
+              echo "plan=$PAYLOAD_TYPE" >> $GITHUB_OUTPUT
             else
               HOUR=$(date -u +%H)
               if [ "$HOUR" -ge "12" ]; then
-                echo "type=feature" >> $GITHUB_OUTPUT
+                echo "plan=night_drop" >> $GITHUB_OUTPUT
               else
-                echo "type=challenge" >> $GITHUB_OUTPUT
+                echo "plan=morning_batch" >> $GITHUB_OUTPUT
               fi
             fi
+            echo "mode=$PAYLOAD_MODE" >> $GITHUB_OUTPUT
             echo "target_id=$PAYLOAD_TARGET" >> $GITHUB_OUTPUT
           else
             # Automated cron schedule: determine by UTC hour
             HOUR=$(date -u +%H)
             if [ "$HOUR" -ge "12" ]; then
               # Evening / Night run (16:15 UTC = 21:45 IST)
-              echo "type=feature" >> $GITHUB_OUTPUT
+              echo "plan=night_drop" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
               echo "target_id=" >> $GITHUB_OUTPUT
             else
               # Morning run (01:00 UTC = 06:30 IST)
-              echo "type=challenge" >> $GITHUB_OUTPUT
+              echo "plan=morning_batch" >> $GITHUB_OUTPUT
+              echo "mode=auto" >> $GITHUB_OUTPUT
               echo "target_id=" >> $GITHUB_OUTPUT
             fi
           fi
 
-      - name: Build Reel Video
-        run: |
-          TYPE="${{ steps.mode.outputs.type }}"
-          TARGET_ID="${{ steps.mode.outputs.target_id }}"
-          echo "Executing Build for Mode: $TYPE, ID: $TARGET_ID"
-          if [ -n "$TARGET_ID" ]; then
-            node scripts/build_challenge_reel.js --type "$TYPE" --id "$TARGET_ID"
-          else
-            node scripts/build_challenge_reel.js --type "$TYPE"
-          fi
-
-      - name: Syndicate to Platforms
+      # -------------------------------------------------------------
+      # 1. MORNING BATCH / CHALLENGE DROP
+      # -------------------------------------------------------------
+      - name: Execute Morning Challenge Reel (Build & Publish Live)
+        if: steps.plan.outputs.plan == 'morning_batch' || steps.plan.outputs.plan == 'challenge'
         env:
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
@@ -109,26 +121,94 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          TYPE="${{ steps.mode.outputs.type }}"
-          TARGET_ID="${{ steps.mode.outputs.target_id }}"
+          TARGET_ID="${{ steps.plan.outputs.target_id }}"
+          echo "🌅 Executing Morning Challenge Drop..."
           if [ -n "$TARGET_ID" ]; then
-            node scripts/post_challenge_reel.js --type "$TYPE" --id "$TARGET_ID"
+            node scripts/build_challenge_reel.js --type challenge --id "$TARGET_ID"
+            node scripts/post_challenge_reel.js --type challenge --id "$TARGET_ID"
           else
-            node scripts/post_challenge_reel.js --type "$TYPE"
+            node scripts/build_challenge_reel.js --type challenge
+            node scripts/post_challenge_reel.js --type challenge
           fi
 
-      - name: Commit Updated Progress State
+      - name: Pre-Schedule Night Feature Reel (FB Planner & YouTube Shorts)
+        if: steps.plan.outputs.plan == 'morning_batch' || (steps.plan.outputs.plan == 'feature' && steps.plan.outputs.mode == 'schedule')
+        env:
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          TARGET_ID="${{ steps.plan.outputs.target_id }}"
+          echo "🌙 Pre-Scheduling Night Feature Reel into Facebook Page Planner & YouTube Shorts..."
+          if [ -n "$TARGET_ID" ]; then
+            node scripts/build_challenge_reel.js --type feature --id "$TARGET_ID"
+            node scripts/post_challenge_reel.js --type feature --id "$TARGET_ID" --schedule
+          else
+            node scripts/build_challenge_reel.js --type feature
+            node scripts/post_challenge_reel.js --type feature --schedule
+          fi
+
+      # -------------------------------------------------------------
+      # 2. NIGHT DROP / INSTAGRAM EXCLUSIVE
+      # -------------------------------------------------------------
+      - name: Execute Night Instagram Drop (Or Fallback Live Drop)
+        if: steps.plan.outputs.plan == 'night_drop' || (steps.plan.outputs.plan == 'feature' && steps.plan.outputs.mode != 'schedule')
+        env:
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          TARGET_ID="${{ steps.plan.outputs.target_id }}"
+          MODE="${{ steps.plan.outputs.mode }}"
+          echo "🌙 Executing Night Drop..."
+          # If staged reel is missing, build it as fallback
+          if [ ! -f "rendered_reels/staged_feature_reel.mp4" ]; then
+            echo "⚠️ Staged reel missing. Building on the fly..."
+            if [ -n "$TARGET_ID" ]; then
+              node scripts/build_challenge_reel.js --type feature --id "$TARGET_ID"
+            else
+              node scripts/build_challenge_reel.js --type feature
+            fi
+          fi
+
+          if [ "$MODE" = "live" ]; then
+            if [ -n "$TARGET_ID" ]; then
+              node scripts/post_challenge_reel.js --type feature --id "$TARGET_ID" --force
+            else
+              node scripts/post_challenge_reel.js --type feature --force
+            fi
+          else
+            # Default night mode: Instagram-only drop (FB & YT already pre-scheduled)
+            if [ -n "$TARGET_ID" ]; then
+              node scripts/post_challenge_reel.js --type feature --id "$TARGET_ID" --instagram-only
+            else
+              node scripts/post_challenge_reel.js --type feature --instagram-only
+            fi
+          fi
+
+      # -------------------------------------------------------------
+      # 3. STATE SYNC & STAGED MEDIA COMMIT
+      # -------------------------------------------------------------
+      - name: Commit State & Stage/Cleanup Media
         if: always()
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          git add state.json
+          git add -A state.json rendered_reels/staged_feature_reel.mp4
           if ! git diff --staged --quiet; then
-            git commit -m "Auto-progress: Likhit Jap dual state advanced [skip ci]"
+            git commit -m "Auto-progress: Likhit Jap state and staged media synchronized [skip ci]"
             for i in 1 2 3; do
               git pull --rebase origin main || true
               git push origin main && break || sleep 2
             done
           else
-            echo "No state changes to commit."
+            echo "No state or media changes to commit."
           fi

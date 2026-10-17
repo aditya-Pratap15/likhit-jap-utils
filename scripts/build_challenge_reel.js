@@ -31,8 +31,8 @@ async function buildReel(type = 'challenge', targetId = null) {
         console.log(`[🛡️ Likhit Daily Cadence Guard] Challenge Reel Day ${state.lastPublishedDay} has ALREADY been published today (${todayIst}). Skipping video build to prevent premature generation.`);
         return null;
       }
-      if (type === 'feature' && state.lastPublishedFeatureDate === todayIst) {
-        console.log(`[🛡️ Likhit Daily Cadence Guard] Feature Reel #${state.lastPublishedFeatureId} has ALREADY been published tonight (${todayIst}). Skipping video build.`);
+      if (type === 'feature' && (state.lastPublishedFeatureDate === todayIst || state.scheduledFeatureDate === todayIst)) {
+        console.log(`[🛡️ Likhit Daily Cadence Guard] Feature Reel #${state.scheduledFeatureId || state.lastPublishedFeatureId} has ALREADY been scheduled/published for today (${todayIst}). Skipping video build.`);
         return null;
       }
     } catch(e) {

@@ -4,6 +4,7 @@ Thumbs.db
 *.log
 rendered_reels/*.mp4
 !rendered_reels/.gitkeep
+!rendered_reels/staged_feature_reel.mp4
 temp_assets/
 temp_build/
 
