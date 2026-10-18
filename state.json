@@ -4,7 +4,13 @@
   "history": [],
   "lastPublishedDay": 8,
   "lastPublishedChallengeDate": "2026-10-18",
-  "lastPublishedFeatureDate": "2026-10-18",
+  "lastPublishedFeatureDate": "2026-10-17",
   "lastPublishedAt": "2026-10-18T00:37:38.228Z",
-  "lastPublishedFeatureId": 5
+  "lastPublishedFeatureId": 5,
+  "scheduledFeatureId": 6,
+  "scheduledFeatureDate": "2026-10-18",
+  "scheduledFeatureTime": "2026-10-18T16:15:00.000Z",
+  "scheduledFbPostId": "1625244459145002",
+  "scheduledYtVideoId": null,
+  "lastScheduledAt": "2026-10-18T03:53:26.754Z"
 }
