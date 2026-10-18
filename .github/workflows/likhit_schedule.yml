@@ -202,7 +202,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          git add -A state.json rendered_reels/
+          git add -A state.json rendered_reels/ 2>/dev/null || git add -A
           if ! git diff --staged --quiet; then
             git commit -m "Auto-progress: Likhit Jap state and staged media synchronized [skip ci]"
             for i in 1 2 3; do
