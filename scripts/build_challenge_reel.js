@@ -17,6 +17,13 @@ const path = require('path');
 const { buildMorningReel } = require('./build_morning_reel');
 const { buildNightReel } = require('./build_night_reel');
 
+function getBroadcastDateIST() {
+  const now = new Date();
+  // Shift by -5h so late-night runs (00:00-04:59 AM IST) correctly map to previous evening's broadcast date
+  const shifted = new Date(now.getTime() - (5 * 3600 * 1000));
+  return shifted.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 async function buildReel(type = 'challenge', targetId = null) {
   const isForce = process.argv.includes('--force');
   const statePath = path.join(__dirname, '..', 'state.json');
@@ -25,7 +32,7 @@ async function buildReel(type = 'challenge', targetId = null) {
     try {
       const raw = fs.readFileSync(statePath, 'utf8').replace(/^\uFEFF/, '').trim();
       const state = JSON.parse(raw);
-      const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const todayIst = getBroadcastDateIST();
 
       if (type === 'challenge' && state.lastPublishedChallengeDate === todayIst) {
         console.log(`[🛡️ Likhit Daily Cadence Guard] Challenge Reel Day ${state.lastPublishedDay} has ALREADY been published today (${todayIst}). Skipping video build to prevent premature generation.`);

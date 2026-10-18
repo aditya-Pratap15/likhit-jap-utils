@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ðŸš€ LIKHIT JAP - MULTI-PLATFORM DUAL PUBLISHER (v2.0 Master Production)
  * ---------------------------------------------------------------------
  * Automatically syndicates both:
@@ -44,6 +44,13 @@ function formatUnicodeBold(text) {
   });
 }
 
+
+function getBroadcastDateIST() {
+  const now = new Date();
+  // Shift by -5h so late-night runs (00:00-04:59 AM IST) correctly map to previous evening's broadcast date
+  const shifted = new Date(now.getTime() - (5 * 3600 * 1000));
+  return shifted.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
 
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
@@ -468,7 +475,7 @@ async function publishReel(type = 'challenge', targetId = null, options = {}) {
   const isForce = options.force || process.argv.includes('--force');
   const isPreSchedule = options.schedule || process.argv.includes('--schedule') || process.argv.includes('--pre-schedule');
   const isInstagramOnly = options.instagramOnly || process.argv.includes('--instagram-only');
-  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const todayIst = getBroadcastDateIST();
 
   console.log('\n======================================================');
   console.log(`📡 LIKHIT JAP - MULTI-PLATFORM PUBLISHER [${type.toUpperCase()}]`);
