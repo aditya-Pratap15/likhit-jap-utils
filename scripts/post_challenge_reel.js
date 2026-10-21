@@ -405,7 +405,7 @@ async function publishInstagramReel(videoPath, caption) {
   console.log('  â³ Processing Instagram video encoding on Meta servers...');
   let isReady = false;
   let attempts = 0;
-  while (!isReady && attempts < 40) {
+  while (!isReady && attempts < 75) {
     await new Promise(r => setTimeout(r, 4000));
     attempts++;
     const statusRes = await new Promise(resolve => {
@@ -424,7 +424,7 @@ async function publishInstagramReel(videoPath, caption) {
       console.error('  âŒ Meta transcoding error:', statusRes);
       return { error: statusRes };
     } else {
-      console.log(`  â³ Transcoding in progress (Attempt ${attempts}/40: ${statusRes.status_code || 'PENDING'})...`);
+      console.log(`  â³ Transcoding in progress (Attempt ${attempts}/75: ${statusRes.status_code || 'PENDING'})...`);
     }
   }
 
@@ -615,8 +615,11 @@ async function publishReel(type = 'challenge', targetId = null, options = {}) {
   // NIGHT DROP: Instagram Exclusive Live Publish
   // -------------------------------------------------------------
   if (isFeature && isInstagramOnly) {
-    console.log(`\n📸 Publishing Night Feature Reel to Instagram...`);
     const igRes = await publishInstagramReel(reelPath, formattedCaption);
+    if (!igRes || !igRes.success) {
+      console.error('  ❌ Night Instagram drop failed to publish:', igRes?.error || igRes);
+      return { success: false, error: igRes?.error || 'Publish failed' };
+    }
 
     // Clean up staged reel if it exists
     if (fs.existsSync(stagedPath)) {
