@@ -1,16 +1,11 @@
 {
   "currentDay": 33,
-  "currentFeatureIndex": 6,
+  "currentFeatureIndex": 1,
   "history": [],
   "lastPublishedDay": 32,
   "lastPublishedChallengeDate": "2026-11-11",
-  "lastPublishedFeatureDate": "2026-11-10",
-  "lastPublishedAt": "2026-11-11T00:43:24.429Z",
-  "lastPublishedFeatureId": 5,
-  "lastScheduledAt": "2026-11-11T00:48:02.173Z",
-  "scheduledFeatureId": 6,
-  "scheduledFeatureDate": "2026-11-11",
-  "scheduledFeatureTime": "2026-11-11T16:15:00.000Z",
-  "scheduledFbPostId": "1612134903377258",
-  "scheduledYtVideoId": "ahFJ1HTeoi0"
+  "lastPublishedFeatureDate": "2026-11-11",
+  "lastPublishedAt": "2026-11-11T22:43:07.628Z",
+  "lastPublishedFeatureId": 6,
+  "lastScheduledAt": "2026-11-11T00:48:02.173Z"
 }
